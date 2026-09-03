@@ -257,9 +257,14 @@ sin reparsear.
   bitácora PR-05). El cuerpo limpio queda en 330.840 palabras, a 0,65% de las
   332.999 que el plan fija para PR-11.
 
-- [ ] **PR-06 `[N]` Parser del índice de partes**
+- [x] **PR-06 `[N]` Parser del índice de partes**
   Localiza el índice al final del tomo y extrae carátula → página.
   *Acepta:* 126 entradas en el Tomo 348, con las páginas dentro del rango.
+  Medido: **129 carátulas / 133 referencias de página** (3 carátulas aparecen en
+  varios fallos), páginas citadas de 1 a 955. La diferencia con el 126 no se
+  forzó — hipótesis (referencias cruzadas del índice, p. ej. "Haras El Moro s/
+  queja ... en Carol ...") y verificación en la bitácora PR-06; PR-07 debería
+  cerrar el número al armar los fallos y chequear solapamientos.
 
 - [ ] **PR-07 `[N]` Segmentador de fallos**
   Del índice a los rangos de página; construcción de la cita `348:145`.
@@ -428,5 +433,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-05 cerrados (03/09/2026).
-Próximo: **PR-06**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-06 cerrados (03/09/2026).
+Próximo: **PR-07**.

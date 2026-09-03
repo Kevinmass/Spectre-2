@@ -1,8 +1,9 @@
 """CLI de Spectre.
 
-Estado PR-05: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
-y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto). El
-resto existe en `--help` pero **revienta si lo invocás** (D-05).
+Estado PR-06: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
+`index` parsea el índice por nombres de las partes). El resto existe en `--help`
+pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -139,6 +140,35 @@ def _cmd_pdf_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_index(args: argparse.Namespace) -> int:
+    from spectre.corpus.fallo import analizar_indice
+
+    r = analizar_indice(args.pdf)
+    citadas = r.paginas_citadas
+    filas = [
+        ("pdf", args.pdf),
+        ("páginas del índice", f"pdf_page {r.paginas_indice[0]}–{r.paginas_indice[1]}"),
+        ("carátulas", r.caratulas),
+        ("referencias de página", r.referencias),
+        ("páginas citadas", f"{min(citadas)}–{max(citadas)}"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    multi = [e for e in r.entradas if len(e.paginas) > 1]
+    if multi:
+        print(f"\ncarátulas en varios fallos ({len(multi)}):")
+        for e in multi:
+            paginas = ", ".join(str(p) for p in e.paginas)
+            print(f"  [{paginas}]  {e.caratula}")
+    if args.muestra is not None:
+        print(f"\n--- primeras {args.muestra} entradas ---")
+        for e in r.entradas[: args.muestra]:
+            paginas = ",".join(str(p) for p in e.paginas)
+            print(f"  p.{paginas:<9} {e.caratula}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -191,6 +221,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="PDF_PAGE", help="imprime esa página ya limpia"
     )
     p_pdf_clean.set_defaults(func=_cmd_pdf_clean)
+
+    p_pdf_index = pdf_sub.add_parser(
+        "index",
+        help="Parsea el índice por nombres de las partes y cuenta las carátulas",
+    )
+    p_pdf_index.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_index.add_argument(
+        "--muestra", type=int, metavar="N", help="imprime las primeras N entradas"
+    )
+    p_pdf_index.set_defaults(func=_cmd_pdf_index)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")
