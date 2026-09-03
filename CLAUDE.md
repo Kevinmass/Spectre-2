@@ -65,6 +65,8 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
     pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
   - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
     número de página oficial y el offset (criterio de aceptación de PR-04).
+  - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
+    (encabezados, des-hifenado, versalitas) y mide la reducción de palabras.
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 
