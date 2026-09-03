@@ -1,9 +1,10 @@
 """CLI de Spectre.
 
-Estado PR-07: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+Estado PR-08: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
 y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
-con su cita). El resto existe en `--help` pero **revienta si lo invocás** (D-05).
+con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes). El
+resto existe en `--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -218,6 +219,75 @@ def _cmd_pdf_segment(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_meta(args: argparse.Namespace) -> int:
+    from spectre.corpus.fallo import (
+        extraer_metadatos,
+        parsear_indice,
+        segmentar,
+        texto_del_fallo,
+    )
+    from spectre.corpus.pdf import extraer_texto
+
+    tomo = args.tomo or _tomo_de_nombre(args.pdf)
+    if tomo is None:
+        raise SystemExit("no pude inferir el número de tomo del nombre; pasá --tomo")
+
+    paginas = extraer_texto(args.pdf)
+    por_oficial = {p.pagina_oficial: p for p in paginas if p.pagina_oficial is not None}
+    fin_cuerpo = max(por_oficial)
+    try:
+        entradas = parsear_indice(args.pdf)
+    except ValueError:
+        entradas = None
+    r = segmentar(entradas, paginas, tomo_numero=tomo)
+
+    metas = []
+    for i, f in enumerate(r.fallos):
+        siguiente = r.fallos[i + 1].pagina_inicio if i + 1 < len(r.fallos) else None
+        texto = texto_del_fallo(
+            por_oficial,
+            pagina_inicio=f.pagina_inicio,
+            pagina_inicio_siguiente=siguiente,
+            pagina_fin_cuerpo=fin_cuerpo,
+        )
+        metas.append((f, extraer_metadatos(texto, caratula=f.caratula)))
+
+    n = len(metas)
+    con_fecha = sum(1 for _, m in metas if m.fecha)
+    con_jueces = sum(1 for _, m in metas if m.jueces)
+    ambos = sum(1 for _, m in metas if m.fecha and m.jueces)
+    con_trib = sum(1 for _, m in metas if m.tribunal_origen)
+    con_tipo = sum(1 for _, m in metas if m.tipo_recurso)
+    con_dem = sum(1 for _, m in metas if m.demandado)
+    filas = [
+        ("pdf", args.pdf),
+        ("fallos", n),
+        ("con fecha", f"{con_fecha}/{n}  ({con_fecha / n:.1%})"),
+        ("con jueces", f"{con_jueces}/{n}  ({con_jueces / n:.1%})"),
+        ("con fecha y jueces", f"{ambos}/{n}  ({ambos / n:.1%})"),
+        ("con tribunal origen", f"{con_trib}/{n}  ({con_trib / n:.1%})"),
+        ("con tipo de recurso", f"{con_tipo}/{n}  ({con_tipo / n:.1%})"),
+        ("con demandado", f"{con_dem}/{n}  (resto: una sola parte)"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+
+    sin = [f.cita for f, m in metas if not (m.fecha and m.jueces)]
+    if sin:
+        print(f"\nsin fecha o jueces ({len(sin)}): {', '.join(sin)}")
+    if args.muestra is not None:
+        print(f"\n--- primeros {args.muestra} fallos ---")
+        for f, m in metas[: args.muestra]:
+            print(f"  Fallos: {f.cita}")
+            print(f"    fecha:     {m.fecha}")
+            print(f"    jueces:    {', '.join(m.jueces) or '—'}")
+            print(f"    recurso:   {m.tipo_recurso or '—'}")
+            print(f"    t. origen: {m.tribunal_origen or '—'}")
+            print(f"    partes:    {m.actor or '—'}  c/  {m.demandado or '—'}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -293,6 +363,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="N", help="imprime los primeros N fallos"
     )
     p_pdf_segment.set_defaults(func=_cmd_pdf_segment)
+
+    p_pdf_meta = pdf_sub.add_parser(
+        "meta",
+        help="Extrae fecha, jueces, recurso, tribunal y partes de cada fallo",
+    )
+    p_pdf_meta.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_meta.add_argument(
+        "--tomo", type=int, help="número de tomo (si no, se infiere del nombre)"
+    )
+    p_pdf_meta.add_argument(
+        "--muestra", type=int, metavar="N", help="imprime los primeros N fallos"
+    )
+    p_pdf_meta.set_defaults(func=_cmd_pdf_meta)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

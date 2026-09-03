@@ -281,10 +281,15 @@ sin reparsear.
 
 ### Fase 2 — Estructura del fallo (3 PRs)
 
-- [ ] **PR-08 `[N]` Metadatos del fallo**
+- [x] **PR-08 `[N]` Metadatos del fallo**
   Fecha, tipo de recurso, tribunal de origen, jueces firmantes, partes.
   *Acepta:* ≥90% de los 126 fallos con fecha y jueces; los que fallan quedan
   marcados, no inventados.
+  Medido sobre dos tomos (348 y 349, para no sesgar con un solo archivo):
+  fecha **100% / 100%**, jueces **92,5% / 91,5%**, fecha+jueces **92,5% / 91,5%**.
+  Los ~8% sin jueces son entradas del índice que solo reproducen el sumario
+  (`(*) Sentencia del <fecha>. Ver fallo.`): quedan con `jueces=()`, marcados.
+  Ver bitácora PR-08.
 
 - [ ] **PR-09 `[N]` Secciones: mayoría, votos, disidencias**
   *Acepta:* un fallo con votos concurrentes conocido (p. 145 del Tomo 348) se
@@ -439,5 +444,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-07 cerrados (03/09/2026).
-Próximo: **PR-08**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-08 cerrados (03/09/2026).
+Próximo: **PR-09**.
