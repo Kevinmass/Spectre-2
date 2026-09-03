@@ -220,7 +220,7 @@ sin reparsear.
   duplicados en la raíz (residuo del bug D-02).
   *Acepta:* `pytest` corre y pasa; `ruff check` limpio; CI en verde.
 
-- [ ] **PR-01 `[N]` Configuración y CLI**
+- [x] **PR-01 `[N]` Configuración y CLI**
   `pydantic-settings`, rutas resueltas contra la raíz del paquete (no el CWD),
   `spectre --help` con los subcomandos vacíos.
   *Acepta:* la config se carga desde cualquier CWD y apunta siempre a la misma
@@ -423,4 +423,4 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 cerrado (02/09/2026). Próximo: **PR-01**.
+PR-00 y PR-01 cerrados (02/09/2026). Próximo: **PR-02**.
