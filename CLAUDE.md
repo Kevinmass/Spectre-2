@@ -17,6 +17,14 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
+## Estado del código (al cerrar PR-05)
+
+Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
+migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
+`clean`). El resto del árbol de la §4 del plan (`corpus/fallo/`, `chunking/`,
+`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
+código. La §9 del plan dice cuál es el próximo PR.
+
 ## Reglas de trabajo
 
 - **Un PR por sesión. No encadenar dos.**
@@ -38,6 +46,14 @@ es el próximo PR.
   config tiene que cargar igual desde cualquier directorio (bug D-02).
 - Todo el acceso a datos pasa por `spectre/db/repo.py`. El estado va en SQLite,
   no en JSON escrito a mano (bug D-04).
+- Migraciones: `spectre/db/migrations/NNNN_nombre.sql`, aplicadas en orden y
+  anotadas en la tabla `_migraciones`. El plan nombra `db/schema.sql`; se
+  realizó como `0001_initial.sql` para no tener dos fuentes del esquema. Una
+  restricción de dominio nueva es una migración nueva; SQLite no tiene
+  `ALTER TABLE ADD CONSTRAINT`, así que se reconstruye la tabla (ver `0002`).
+- Job runner: el handler recibe `(conn, job)`, escribe solo por esa conexión y
+  **no** llama `commit()` / `rollback()`. El `Runner` es dueño del límite
+  transaccional; un handler que commitea rompe la garantía "sin duplicar" (D-3).
 - **Regla de dependencias:** `corpus/` no importa `index/` ni `embed/`.
   `search/` no importa `corpus/`. Todo cruce pasa por `db/repo.py`.
 - El modelo de embeddings va detrás de `embed/base.py` y **se registra por
@@ -69,6 +85,20 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
     (encabezados, des-hifenado, versalitas) y mide la reducción de palabras.
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
+
+## Tests
+
+- Planos en `tests/`: un archivo por módulo (`test_extract.py`, `test_clean.py`,
+  ...), no espejan el árbol del paquete. No hay `conftest.py`; cada archivo
+  arma sus fixtures.
+- Los fixtures de texto real son recortes de pocas páginas del Tomo 348 en
+  `tests/fixtures/`, regenerables con `pypdf` (receta en
+  `tests/fixtures/README.md`). El tomo completo (`data/tomos/348.pdf`) no se
+  versiona.
+- Las mediciones de aceptación sobre el tomo entero son tests `slow` + `skipif`
+  que necesitan `data/tomos/348.pdf`. El `pytest` de todos los días las saltea
+  (`addopts = -m 'not slow'`); corrélas con `pytest -m slow` (tardan minutos y
+  CI no las ve).
 
 ## Git
 

@@ -1,4 +1,4 @@
-"""PR-01/02/04 — `--help` anda, `db` migra, `pdf stats` mide, los vacíos revientan."""
+"""PR-01/02/04/06 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
 
 from pathlib import Path
 
@@ -96,6 +96,23 @@ def test_pdf_clean_muestra_una_pagina(capsys):
     out = capsys.readouterr().out
     assert "Luis Ernesto c/ Perrone" in out
     assert not out.splitlines()[-1].startswith("DE JUSTICIA")
+
+
+def test_pdf_index_cuenta_caratulas(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_indice.pdf"
+    assert main(["pdf", "index", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "carátulas" in out
+    assert "129" in out
+    assert "pdf_page 2–6" in out
+
+
+def test_pdf_index_muestra_entradas(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_indice.pdf"
+    assert main(["pdf", "index", str(fixture), "--muestra", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "Acevedo, Eva María" in out
+    assert "varios fallos" in out  # las 3 carátulas multi-página
 
 
 def test_pdf_sin_accion_es_error():
