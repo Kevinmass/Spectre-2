@@ -1,21 +1,22 @@
 """CLI de Spectre.
 
-Estado PR-01: el único subcomando que hace algo es `config`, que imprime las
-rutas resueltas (sirve para verificar D-02 a ojo). El resto existe en
-`--help` pero **revienta si lo invocás**: ningún stub que reporte éxito.
+Estado PR-02: subcomandos reales `config` (imprime rutas resueltas) y `db`
+(migraciones y estado del esquema). El resto existe en `--help` pero **revienta
+si lo invocás**: ningún stub que reporte éxito (D-05).
 """
 
 from __future__ import annotations
 
 import argparse
+import sqlite3
 from collections.abc import Callable, Sequence
 
 from spectre import __version__
 from spectre.config import PROJECT_ROOT, get_settings
+from spectre.db import connect, migraciones_disponibles, migrate
 
 # subcomando -> PR que lo implementa
 _PENDIENTES: dict[str, str] = {
-    "db": "PR-02",
     "ingest": "PR-19",
     "serve": "PR-20",
 }
@@ -34,6 +35,57 @@ def _cmd_config(_args: argparse.Namespace) -> int:
     ancho = max(len(k) for k, _ in filas)
     for k, v in filas:
         print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
+def _cmd_db_migrate(_args: argparse.Namespace) -> int:
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    try:
+        nuevas = migrate(conn)
+    finally:
+        conn.close()
+    if nuevas:
+        print(f"aplicadas en {s.db_path}:")
+        for version in nuevas:
+            print(f"  {version}")
+    else:
+        print(f"sin migraciones pendientes ({s.db_path})")
+    return 0
+
+
+def _cmd_db_status(_args: argparse.Namespace) -> int:
+    s = get_settings()
+    disponibles = [p.stem for p in migraciones_disponibles()]
+    print(f"base: {s.db_path}")
+
+    if not s.db_path.exists():
+        print("  (la base no existe todavía — corré `spectre db migrate`)")
+        for version in disponibles:
+            print(f"  [pendiente] {version}")
+        return 0
+
+    conn = connect(s.db_path)
+    try:
+        try:
+            aplicadas = {
+                row["version"]
+                for row in conn.execute("SELECT version FROM _migraciones")
+            }
+        except sqlite3.OperationalError:
+            aplicadas = set()
+    finally:
+        conn.close()
+
+    if not disponibles:
+        print("  (no hay migraciones)")
+    for version in disponibles:
+        marca = "aplicada " if version in aplicadas else "pendiente"
+        print(f"  [{marca}] {version}")
+    huerfanas = aplicadas - set(disponibles)
+    for version in sorted(huerfanas):
+        print(f"  [huérfana ] {version}  (registrada pero sin archivo)")
     return 0
 
 
@@ -57,6 +109,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_config = sub.add_parser("config", help="Imprime la configuración resuelta")
     p_config.set_defaults(func=_cmd_config)
+
+    p_db = sub.add_parser("db", help="Esquema SQLite: migraciones y estado")
+    db_sub = p_db.add_subparsers(dest="db_command", required=True, metavar="<acción>")
+    p_db_migrate = db_sub.add_parser(
+        "migrate", help="Aplica las migraciones pendientes (crea la base si falta)"
+    )
+    p_db_migrate.set_defaults(func=_cmd_db_migrate)
+    p_db_status = db_sub.add_parser(
+        "status", help="Lista migraciones aplicadas y pendientes"
+    )
+    p_db_status.set_defaults(func=_cmd_db_status)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

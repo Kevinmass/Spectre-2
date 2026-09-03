@@ -49,15 +49,27 @@ es el próximo PR.
 
 ## Comandos
 
-El esqueleto (`pyproject.toml`, ruff, pytest, CI) lo crea PR-00. Una vez cerrado:
+Todo corre en el venv del repo. En esta máquina (Windows) no hay Python 3.11
+instalado: el `.venv` es 3.13 y **CI valida contra 3.11** (`.github/workflows/ci.yml`).
+Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
 
-- `pytest` — corre toda la suite. Un solo test: `pytest ruta/al/test.py::nombre`.
-- `ruff check` — lint. `ruff format` — formato.
-- `spectre --help` — CLI (subcomandos se van llenando por fase; `serve` levanta
-  la UI en localhost a partir de PR-20).
+- `python -m pytest` — corre toda la suite. Un solo test:
+  `python -m pytest tests/test_db.py::nombre`.
+- `ruff check .` — lint. `ruff format --check .` — formato (el gate de CI corre
+  `ruff check`; el formato se verifica a mano antes de commitear).
+- `python -m spectre.cli <sub>` o `spectre <sub>` (entry point instalado):
+  - `spectre config` — imprime las rutas resueltas (verificación a ojo de D-02).
+  - `spectre db migrate` — crea `data/spectre.db` y aplica las migraciones
+    pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
+  - `spectre ingest` / `serve` — declarados pero revientan (los implementan
+    PR-19 / PR-20). Ningún stub que reporte éxito.
 
-Python de desarrollo: 3.11 (D-11). La máquina tiene 3.13 instalado; usar un venv
-3.11 para que coincida con CI.
+## Git
+
+- Rama por PR: `pr-NN-slug` (ej. `pr-02-esquema-sqlite`), sacada de `main`
+  actualizado. PR contra `main`. El remoto es `origin` → `Kevinmass/Spectre-2`.
+- El commit que cierra el PR marca la casilla en `docs/plan-spectre.md` (§6 y §9)
+  y agrega `docs/qa/bitacora-PR-NN.md`.
 
 ## Fixture de referencia
 

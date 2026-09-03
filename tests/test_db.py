@@ -1,0 +1,293 @@
+"""PR-02 — esquema SQLite, migraciones idempotentes y repositorio.
+
+Criterio de aceptación (plan §6): crear la base, insertar un tomo y leerlo;
+test de idempotencia de la migración.
+"""
+
+import sqlite3
+
+import pytest
+
+from spectre.db import Repo, connect, migraciones_disponibles, migrate
+
+
+@pytest.fixture
+def conn(tmp_path):
+    c = connect(tmp_path / "spectre.db")
+    yield c
+    c.close()
+
+
+@pytest.fixture
+def repo(conn):
+    migrate(conn)
+    return Repo(conn)
+
+
+def _tablas(conn):
+    return {
+        r[0]
+        for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+
+
+def _dump_esquema(conn):
+    return sorted(
+        r[0]
+        for r in conn.execute("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL")
+    )
+
+
+# --- migraciones -------------------------------------------------------- #
+
+
+def test_migrate_crea_el_esquema_completo(conn):
+    aplicadas = migrate(conn)
+    assert aplicadas == ["0001_initial"]
+    esperadas = {
+        "tomos",
+        "paginas",
+        "fallos",
+        "secciones",
+        "chunks",
+        "citas",
+        "jobs",
+        "_migraciones",
+    }
+    assert esperadas <= _tablas(conn)
+
+
+def test_migrate_es_idempotente(conn):
+    assert migrate(conn) == ["0001_initial"]
+    esquema_1 = _dump_esquema(conn)
+
+    assert migrate(conn) == []  # nada pendiente, sin error
+    assert migrate(conn) == []
+    assert _dump_esquema(conn) == esquema_1
+
+    filas = conn.execute("SELECT count(*) FROM _migraciones").fetchone()[0]
+    assert filas == 1
+
+
+def test_migrate_sobre_base_ya_migrada_en_otra_conexion(tmp_path):
+    ruta = tmp_path / "spectre.db"
+    c1 = connect(ruta)
+    assert migrate(c1) == ["0001_initial"]
+    c1.close()
+
+    c2 = connect(ruta)
+    assert migrate(c2) == []
+    c2.close()
+
+
+def test_hay_una_sola_migracion_por_ahora():
+    nombres = [p.name for p in migraciones_disponibles()]
+    assert nombres == ["0001_initial.sql"]
+
+
+# --- tomos ------------------------------------------------------------ #
+
+
+def test_insert_y_leer_tomo(repo):
+    tomo_id = repo.insert_tomo(
+        348,
+        anio=2025,
+        pdf_path="data/tomos/348.pdf",
+        sha256="abc123",
+        calidad="digital",
+        paginas=968,
+        offset_pagina=6,
+        estado="registrado",
+    )
+    assert tomo_id == 1
+
+    tomo = repo.get_tomo(tomo_id)
+    assert tomo is not None
+    assert tomo.numero == 348
+    assert tomo.anio == 2025
+    assert tomo.sha256 == "abc123"
+    assert tomo.calidad == "digital"
+    assert tomo.paginas == 968
+    assert tomo.offset_pagina == 6
+    assert tomo.estado == "registrado"
+    assert tomo.indexado_at is None
+
+
+def test_get_tomo_por_numero_y_defaults(repo):
+    repo.insert_tomo(100)
+    tomo = repo.get_tomo_por_numero(100)
+    assert tomo is not None
+    assert tomo.calidad == "desconocida"  # default del esquema
+    assert tomo.estado == "registrado"
+    assert tomo.volumen is None
+
+
+def test_get_tomo_inexistente_es_none(repo):
+    assert repo.get_tomo(999) is None
+    assert repo.get_tomo_por_numero(999) is None
+
+
+def test_numero_de_tomo_es_unico(repo):
+    repo.insert_tomo(348)
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_tomo(348)
+
+
+def test_sha256_es_unico(repo):
+    repo.insert_tomo(1, sha256="dup")
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_tomo(2, sha256="dup")
+
+
+def test_calidad_invalida_es_rechazada(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_tomo(1, calidad="excelente")
+
+
+def test_list_tomos_ordena_por_numero(repo):
+    repo.insert_tomo(348)
+    repo.insert_tomo(100)
+    repo.insert_tomo(311)
+    assert [t.numero for t in repo.list_tomos()] == [100, 311, 348]
+
+
+def test_actualizar_tomo(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id, estado="segmentado", paginas=968, offset_pagina=6)
+    tomo = repo.get_tomo(tomo_id)
+    assert tomo.estado == "segmentado"
+    assert tomo.paginas == 968
+    assert tomo.offset_pagina == 6
+
+
+def test_actualizar_tomo_rechaza_columnas_no_mutables(repo):
+    tomo_id = repo.insert_tomo(348)
+    with pytest.raises(ValueError):
+        repo.actualizar_tomo(tomo_id, numero=999)
+    with pytest.raises(ValueError):
+        repo.actualizar_tomo(tomo_id, columna_fantasma=1)
+
+
+def test_actualizar_tomo_sin_campos_es_noop(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id)
+    assert repo.get_tomo(tomo_id).numero == 348
+
+
+# --- páginas ---------------------------------------------------------- #
+
+
+def test_insert_y_leer_pagina(repo):
+    tomo_id = repo.insert_tomo(348)
+    pid = repo.insert_pagina(
+        tomo_id, 7, pagina_oficial=1, texto_crudo="FALLOS DE LA CORTE"
+    )
+    assert pid == 1
+    pagina = repo.get_pagina(tomo_id, 7)
+    assert pagina is not None
+    assert pagina.pagina_oficial == 1
+    assert pagina.texto_crudo == "FALLOS DE LA CORTE"
+    assert pagina.texto_limpio is None
+
+
+def test_pagina_pdf_page_unica_por_tomo(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_pagina(tomo_id, 7)
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_pagina(tomo_id, 7)
+
+
+def test_pagina_sin_tomo_viola_foreign_key(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_pagina(999, 1)
+
+
+def test_list_y_contar_paginas(repo):
+    tomo_id = repo.insert_tomo(348)
+    for pdf_page in (3, 1, 2):
+        repo.insert_pagina(tomo_id, pdf_page)
+    assert [p.pdf_page for p in repo.list_paginas(tomo_id)] == [1, 2, 3]
+    assert repo.contar_paginas(tomo_id) == 3
+
+
+def test_borrar_tomo_arrastra_las_paginas(repo, conn):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_pagina(tomo_id, 1)
+    conn.execute("DELETE FROM tomos WHERE id = ?", (tomo_id,))
+    conn.commit()
+    assert repo.contar_paginas(tomo_id) == 0
+
+
+# --- fallos ---------------------------------------------------------- #
+
+
+def test_insert_y_leer_fallo(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(
+        tomo_id,
+        "Zárate, Pablo Federico y otros c/ ENRE s/ diferencias de salarios",
+        cita="348:380",
+        pagina_inicio=380,
+        pagina_fin=384,
+        fecha="2025-04-15",
+        jueces='["Rosenkrantz", "Rosatti"]',
+    )
+    fallo = repo.get_fallo(fid)
+    assert fallo is not None
+    assert fallo.cita == "348:380"
+    assert fallo.pagina_inicio == 380
+    assert fallo.jueces == '["Rosenkrantz", "Rosatti"]'
+
+    assert repo.get_fallo_por_cita("348:380").id == fid
+
+
+def test_cita_de_fallo_es_unica(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_fallo(tomo_id, "C c/ D", cita="348:1")
+
+
+def test_cita_nula_no_colisiona(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_fallo(tomo_id, "A c/ B")
+    repo.insert_fallo(tomo_id, "C c/ D")  # dos citas NULL conviven
+    assert len(repo.list_fallos(tomo_id)) == 2
+
+
+def test_list_fallos_ordena_por_pagina_inicio(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_fallo(tomo_id, "tercero", pagina_inicio=380)
+    repo.insert_fallo(tomo_id, "primero", pagina_inicio=5)
+    repo.insert_fallo(tomo_id, "segundo", pagina_inicio=145)
+    assert [f.caratula for f in repo.list_fallos(tomo_id)] == [
+        "primero",
+        "segundo",
+        "tercero",
+    ]
+
+
+def test_fallo_sin_tomo_viola_foreign_key(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_fallo(999, "huérfano")
+
+
+# --- conexión ------------------------------------------------------------ #
+
+
+def test_connect_activa_foreign_keys_y_wal(tmp_path):
+    c = connect(tmp_path / "x.db")
+    try:
+        assert c.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert c.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    finally:
+        c.close()
+
+
+def test_connect_crea_la_carpeta_contenedora(tmp_path):
+    destino = tmp_path / "no" / "existe" / "todavia" / "spectre.db"
+    c = connect(destino)
+    try:
+        assert destino.parent.is_dir()
+    finally:
+        c.close()
