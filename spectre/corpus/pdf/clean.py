@@ -44,7 +44,7 @@ _MAX_LINEAS_ENCABEZADO = 4
 # Palabra cortada por guion al final del renglón; se une si sigue en minúscula.
 _GUION_CORTE = re.compile(r"([^\W\d_])[ \t]*-[ \t]*\n[ \t]*([a-záéíóúñüïö])")
 
-# Cualquier palabra (letras). El filtro de versalita lo hace `_es_versalita`.
+# Cualquier palabra (letras). El filtro de versalita lo hace `es_versalita`.
 _PALABRA = re.compile(r"[^\W\d_]+")
 
 
@@ -64,9 +64,11 @@ def _unir_guiones(texto: str) -> str:
     return _GUION_CORTE.sub(r"\1\2", texto)
 
 
-def _es_versalita(palabra: str) -> bool:
+def es_versalita(palabra: str) -> bool:
     """True si la palabra mezcla mayúsculas y minúsculas y **no** es
-    Capitalizado normal (`Raskovsky`). Cubre `ERnEsto`, `FERnando`, `caRLos`."""
+    Capitalizado normal (`Raskovsky`). Cubre `ERnEsto`, `FERnando`, `caRLos`.
+    Lo usa también el segmentador (PR-07) para reconocer la carátula en
+    versalita que encabeza cada fallo."""
     tiene_alta = any(c.isupper() for c in palabra)
     tiene_baja = any(c.islower() for c in palabra)
     if not (tiene_alta and tiene_baja):
@@ -76,7 +78,7 @@ def _es_versalita(palabra: str) -> bool:
 
 def _normalizar_versalitas(texto: str) -> str:
     return _PALABRA.sub(
-        lambda m: m.group(0).capitalize() if _es_versalita(m.group(0)) else m.group(0),
+        lambda m: m.group(0).capitalize() if es_versalita(m.group(0)) else m.group(0),
         texto,
     )
 

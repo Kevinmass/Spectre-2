@@ -50,3 +50,29 @@ for i in range(961, 968):  # pdf_page 962..968
 with open("tests/fixtures/tomo348_indice.pdf", "wb") as f:
     w.write(f)
 ```
+
+## `tomo348_cuerpo_p189-246.pdf`
+
+Seis páginas **no contiguas** del Tomo 348, elegidas para probar el fallback por
+delimitadores del segmentador (`spectre.corpus.fallo.segmenter`, PR-07):
+
+- `pdf_page` 195 (oficial 189): inicio del fallo "Acevedo ... s/ quiebra", el más
+  largo del tomo (57 páginas).
+- `pdf_page` 196, 205, 250, 251 (oficiales 190, 199, 244, 245): interior de ese
+  mismo fallo — traen `Fallos:` citados, `FALLO DE LA CORTE`, etc., pero **no**
+  carátula.
+- `pdf_page` 252 (oficial 246): inicio del fallo siguiente ("Favero ...").
+
+El fallback tiene que ver dos inicios (189 y 246) y no meter ningún corte en el
+medio. Regenerar:
+
+```python
+from pypdf import PdfReader, PdfWriter
+
+r = PdfReader("data/tomos/348.pdf")
+w = PdfWriter()
+for pp in (195, 196, 205, 250, 251, 252):
+    w.add_page(r.pages[pp - 1])
+with open("tests/fixtures/tomo348_cuerpo_p189-246.pdf", "wb") as f:
+    w.write(f)
+```

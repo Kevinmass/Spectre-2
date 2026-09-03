@@ -2,6 +2,7 @@
 
 from spectre.corpus.pdf.clean import (
     contar_palabras,
+    es_versalita,
     limpiar,
     limpiar_tomo,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "calcular_offset",
     "contar_palabras",
     "detectar_pagina_oficial",
+    "es_versalita",
     "extraer_texto",
     "limpiar",
     "limpiar_tomo",
