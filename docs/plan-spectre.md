@@ -226,7 +226,7 @@ sin reparsear.
   *Acepta:* la config se carga desde cualquier CWD y apunta siempre a la misma
   carpeta `data/`. Test explícito de eso (es el bug D-02).
 
-- [ ] **PR-02 `[N]` Esquema SQLite y repositorio**
+- [x] **PR-02 `[N]` Esquema SQLite y repositorio**
   `schema.sql`, migraciones versionadas simples, `db/repo.py` con las
   operaciones de tomo/página/fallo.
   *Acepta:* crear la base, insertar un tomo y leerlo; test de idempotencia de la
@@ -423,4 +423,4 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). Próximo: **PR-02**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 cerrado (03/09/2026). Próximo: **PR-03**.
