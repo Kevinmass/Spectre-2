@@ -1,0 +1,45 @@
+# Configuración del sistema Document Semantic Search
+# Este archivo define la configuración centralizada para todo el sistema
+
+# Rutas del sistema
+paths:
+  base_path: "."  # Ruta base del proyecto
+  documents_path: "data/documents"  # Carpeta de documentos originales
+  processed_path: "data/processed"  # Carpeta de documentos procesados
+  vector_index_path: "data/vector_index"  # Carpeta de índices vectoriales
+  logs_path: "logs"  # Carpeta de logs
+  temp_path: "temp"  # Carpeta temporal
+
+# Configuración del sistema
+system:
+  environment: "development"  # development, testing, production
+  debug: true  # Modo debug
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  max_workers: 4  # Número máximo de workers para procesamiento
+  cpu_usage_limit: 0.8  # Límite de uso de CPU (80%)
+  memory_limit_gb: 4.0  # Límite de memoria en GB
+
+# Configuración de embeddings
+embedding:
+  model_name: "all-MiniLM-L6-v2"  # Modelo de embeddings
+  model_path: "models/embeddings/all-MiniLM-L6-v2"  # Ruta del modelo
+  device: "cpu"  # cpu o cuda
+  batch_size: 32  # Tamaño del batch para procesamiento
+  normalize_embeddings: true  # Normalizar embeddings
+
+# Configuración de procesamiento de documentos
+processing:
+  chunk_size: 500  # Tamaño de chunks en palabras
+  chunk_overlap: 100  # Superposición entre chunks
+  max_document_size_mb: 50  # Tamaño máximo de documento en MB
+  supported_formats: [".pdf"]  # Formatos soportados
+  cleanup_temp_files: true  # Limpiar archivos temporales
+
+# Configuración de base de datos vectorial
+database:
+  host: "localhost"  # Host de la base de datos
+  port: 6333  # Puerto de la base de datos
+  collection_name: "documents"  # Nombre de la colección
+  distance: "Cosine"  # Tipo de distancia (Cosine, Euclidean, Dot)
+  vector_size: 384  # Tamaño del vector (depende del modelo)
+  recreate_collection: false  # Recrear colección si existe

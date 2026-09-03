@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Entornos
+.venv/
+venv/
+env/
+
+# Herramientas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Datos locales (se resuelven contra la raíz del paquete, nunca se versionan)
+/data/
+/logs/
+/temp/
+*.db
+*.db-wal
+*.db-shm
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

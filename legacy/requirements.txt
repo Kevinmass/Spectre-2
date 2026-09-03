@@ -1,0 +1,42 @@
+# Document Semantic Search - Requisitos principales
+
+# API y desarrollo web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.11.9
+
+# Procesamiento de archivos y monitoreo
+watchdog==3.0.0
+PyPDF2==3.0.1
+pdfminer.six==20231228
+
+# Procesamiento de texto y NLP
+nltk==3.8.1
+textblob==0.17.1
+
+# Embeddings y machine learning
+sentence-transformers==3.0.1
+torch==2.10.0
+transformers==4.48.0
+
+# Base de datos vectorial
+qdrant-client==1.13.0
+chromadb==0.5.0
+
+# Procesamiento concurrente
+concurrent-log-handler==0.9.25
+
+# Monitoreo de recursos
+psutil==7.0.0
+
+# Utilidades
+python-dotenv==1.0.0
+pyyaml==6.0.1
+click==8.1.7
+
+# Desarrollo (opcional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+mypy==1.16.0

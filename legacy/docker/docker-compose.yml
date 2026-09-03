@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DSS_ENV=production
+      - DSS_CONFIG_FILE=/app/config/settings.yaml
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../temp:/app/temp
+      - ../config:/app/config
+    depends_on:
+      - vector-db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/simple"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - dss-network
+
+  # Base de datos vectorial (Qdrant)
+  vector-db:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__ADDRESS=0.0.0.0
+      - QDRANT__SERVICE__PORT=6333
+      - QDRANT__LOG__LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - dss-network
+
+  # Frontend (cuando esté listo)
+  # frontend:
+  #   build:
+  #     context: ../desktop-app
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - dss-network
+
+volumes:
+  qdrant_data:
+    driver: local
+
+networks:
+  dss-network:
+    driver: bridge
