@@ -1,8 +1,8 @@
 """CLI de Spectre.
 
-Estado PR-02: subcomandos reales `config` (imprime rutas resueltas) y `db`
-(migraciones y estado del esquema). El resto existe en `--help` pero **revienta
-si lo invocás**: ningún stub que reporte éxito (D-05).
+Estado PR-04: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+y `pdf stats` (mide extracción de texto y offset de un tomo). El resto existe en
+`--help` pero **revienta si lo invocás**: ningún stub que reporte éxito (D-05).
 """
 
 from __future__ import annotations
@@ -89,6 +89,30 @@ def _cmd_db_status(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_stats(args: argparse.Namespace) -> int:
+    # Import perezoso: pdfplumber es pesado y solo `pdf` lo necesita.
+    from spectre.corpus.pdf import calcular_offset, extraer_texto
+
+    paginas = extraer_texto(args.pdf)
+    r = calcular_offset(paginas)
+    filas = [
+        ("pdf", args.pdf),
+        ("páginas", r.total),
+        ("con nº oficial", f"{r.detectadas}  ({r.cobertura:.1%})"),
+        ("offset", r.offset),
+        ("consistencia", f"{r.consistentes}/{r.detectadas}  ({r.consistencia:.1%})"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    if r.discrepancias:
+        muestra = ", ".join(str(n) for n in r.discrepancias[:15])
+        cola = " ..." if len(r.discrepancias) > 15 else ""
+        etq = "discrepancias".ljust(ancho)
+        print(f"{etq}  {len(r.discrepancias)} en pdf_page {muestra}{cola}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -120,6 +144,17 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="Lista migraciones aplicadas y pendientes"
     )
     p_db_status.set_defaults(func=_cmd_db_status)
+
+    p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
+    pdf_sub = p_pdf.add_subparsers(
+        dest="pdf_command", required=True, metavar="<acción>"
+    )
+    p_pdf_stats = pdf_sub.add_parser(
+        "stats",
+        help="Extrae el texto de un tomo y mide cobertura de nº oficial y offset",
+    )
+    p_pdf_stats.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_stats.set_defaults(func=_cmd_pdf_stats)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

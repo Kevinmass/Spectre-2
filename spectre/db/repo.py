@@ -15,6 +15,7 @@ que se desincronicen (el mismo PR pide "migraciones versionadas").
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -271,6 +272,32 @@ class Repo:
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def insert_paginas(
+        self,
+        tomo_id: int,
+        filas: Iterable[tuple[int, int | None, str | None]],
+    ) -> int:
+        """Inserta páginas en lote. Cada fila es
+        `(pdf_page, pagina_oficial, texto_crudo)`; `texto_limpio` lo completa
+        PR-05. Devuelve cuántas insertó."""
+        datos = [
+            (tomo_id, pdf_page, pagina_oficial, texto_crudo)
+            for pdf_page, pagina_oficial, texto_crudo in filas
+        ]
+        self.conn.executemany(
+            "INSERT INTO paginas (tomo_id, pdf_page, pagina_oficial, texto_crudo) "
+            "VALUES (?, ?, ?, ?)",
+            datos,
+        )
+        self.conn.commit()
+        return len(datos)
+
+    def borrar_paginas(self, tomo_id: int) -> int:
+        """Borra todas las páginas del tomo. Devuelve cuántas borró."""
+        cur = self.conn.execute("DELETE FROM paginas WHERE tomo_id = ?", (tomo_id,))
+        self.conn.commit()
+        return cur.rowcount
 
     def get_pagina(self, tomo_id: int, pdf_page: int) -> Pagina | None:
         return _pagina(

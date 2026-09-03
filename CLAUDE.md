@@ -53,14 +53,18 @@ Todo corre en el venv del repo. En esta máquina (Windows) no hay Python 3.11
 instalado: el `.venv` es 3.13 y **CI valida contra 3.11** (`.github/workflows/ci.yml`).
 Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
 
-- `python -m pytest` — corre toda la suite. Un solo test:
-  `python -m pytest tests/test_db.py::nombre`.
+- `python -m pytest` — corre la suite (rápida; excluye `-m slow`). Un solo test:
+  `python -m pytest tests/test_db.py::nombre`. La marca `slow` es la medición de
+  aceptación sobre el Tomo 348 completo (~2 min, necesita `data/tomos/348.pdf`):
+  `python -m pytest -m slow`.
 - `ruff check .` — lint. `ruff format --check .` — formato (el gate de CI corre
   `ruff check`; el formato se verifica a mano antes de commitear).
 - `python -m spectre.cli <sub>` o `spectre <sub>` (entry point instalado):
   - `spectre config` — imprime las rutas resueltas (verificación a ojo de D-02).
   - `spectre db migrate` — crea `data/spectre.db` y aplica las migraciones
     pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
+  - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
+    número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 
