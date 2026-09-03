@@ -1,4 +1,4 @@
-"""PR-01/02/04/06 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
+"""PR-01/02/04/06/07 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
 
 from pathlib import Path
 
@@ -113,6 +113,34 @@ def test_pdf_index_muestra_entradas(capsys):
     out = capsys.readouterr().out
     assert "Acevedo, Eva María" in out
     assert "varios fallos" in out  # las 3 carátulas multi-página
+
+
+def test_pdf_segment_arma_los_fallos(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_indice.pdf"
+    assert main(["pdf", "segment", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "método" in out and "indice" in out
+    assert "fallo más largo  57 páginas" in out
+    assert "mediana          4 páginas" in out
+    assert "solapamientos    0" in out
+
+
+def test_pdf_segment_muestra_fallos_con_cita(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_indice.pdf"
+    assert main(["pdf", "segment", str(fixture), "--muestra", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "Fallos: 348:1" in out
+    assert "Raskovsky, Luis Ernesto c/ Perrone" in out
+
+
+def test_pdf_segment_sin_numero_de_tomo_inferible(capsys, tmp_path):
+    pdf = tmp_path / "sin-numero.pdf"
+    pdf.write_bytes(
+        (Path(__file__).parent / "fixtures" / "tomo348_indice.pdf").read_bytes()
+    )
+    with pytest.raises(SystemExit) as exc:
+        main(["pdf", "segment", str(pdf)])
+    assert "--tomo" in str(exc.value)
 
 
 def test_pdf_sin_accion_es_error():

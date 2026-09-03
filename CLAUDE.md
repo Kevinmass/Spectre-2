@@ -17,24 +17,30 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-05)
+## Estado del código (al cerrar PR-07)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
-`clean`). El resto del árbol de la §4 del plan (`corpus/fallo/`, `chunking/`,
-`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
-código. La §9 del plan dice cuál es el próximo PR.
+`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter`). El resto del
+árbol de la §4 del plan (`corpus/fallo/structure` y sig., `chunking/`, `embed/`,
+`index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9
+del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
-- **Un PR por sesión. No encadenar dos.**
+- **Metodología con Claude Code (a partir de PR-07):** se trabaja el PR
+  indicado y solo ese. Al terminarlo —bitácora escrita, casilla marcada, commit
+  hecho— se hace `git push` de la rama y se abre el PR con `gh pr create`
+  (base `main`). Después **se para y se espera nueva instrucción**: no se
+  arranca el PR siguiente por cuenta propia.
 - Cada PR cierra escribiendo `docs/qa/bitacora-PR-NN.md`: qué hizo, qué decidió
   por su cuenta, en qué se desvió del plan, qué verificó y con qué comandos
   exactos, qué dudas quedaron. Tiene que poder leerse sin el diff al lado.
 - Marcá la casilla del PR en `docs/plan-spectre.md` (§6 y §9), en el mismo commit
   que lo cierra.
 - Los criterios de aceptación son números medidos sobre el fixture, no "parece
-  que anda". Verificá contra el número del plan.
+  que anda". Verificá contra el número del plan; si no da, se anota la diferencia
+  medida en la bitácora y no se fuerza.
 
 ## Reglas del código
 

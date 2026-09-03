@@ -1,9 +1,9 @@
 """CLI de Spectre.
 
-Estado PR-06: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+Estado PR-07: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
 y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
-`index` parsea el índice por nombres de las partes). El resto existe en `--help`
-pero **revienta si lo invocás** (D-05).
+`index` parsea el índice por nombres de las partes, `segment` arma los fallos
+con su cita). El resto existe en `--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -169,6 +169,55 @@ def _cmd_pdf_index(args: argparse.Namespace) -> int:
     return 0
 
 
+def _tomo_de_nombre(pdf: str) -> int | None:
+    import re
+    from pathlib import Path
+
+    m = re.search(r"\d{2,4}", Path(pdf).stem)
+    return int(m.group()) if m else None
+
+
+def _cmd_pdf_segment(args: argparse.Namespace) -> int:
+    from spectre.corpus.fallo import parsear_indice, segmentar
+    from spectre.corpus.pdf import extraer_texto
+
+    tomo = args.tomo or _tomo_de_nombre(args.pdf)
+    if tomo is None:
+        raise SystemExit("no pude inferir el número de tomo del nombre; pasá --tomo")
+
+    paginas = extraer_texto(args.pdf)
+    try:
+        entradas = parsear_indice(args.pdf)
+    except ValueError:
+        entradas = None
+    r = segmentar(entradas, paginas, tomo_numero=tomo)
+
+    ini, fin = r.cobertura
+    metodo = r.metodo + ("  (dudosa)" if r.dudosa else "")
+    filas = [
+        ("pdf", args.pdf),
+        ("método", metodo),
+        ("fallos", r.cantidad),
+        ("cobertura", f"página {ini} a {fin}"),
+        ("solapamientos", len(r.solapamientos)),
+        ("huecos", len(r.huecos)),
+        ("fallo más largo", f"{r.pagina_mas_larga} páginas"),
+        ("mediana", f"{r.mediana_paginas:g} páginas"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    for a, b in r.solapamientos:
+        print(f"  solapa: {a} con {b}")
+    for a, b in r.huecos:
+        print(f"  hueco: entre página {a} y {b}")
+    if args.muestra is not None:
+        print(f"\n--- primeros {args.muestra} fallos ---")
+        for f in r.fallos[: args.muestra]:
+            print(f"  Fallos: {f.cita:10} ({f.paginas:>2} pág)  {f.caratula}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -231,6 +280,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="N", help="imprime las primeras N entradas"
     )
     p_pdf_index.set_defaults(func=_cmd_pdf_index)
+
+    p_pdf_segment = pdf_sub.add_parser(
+        "segment",
+        help="Arma los fallos del tomo (rango de página + cita) desde el índice",
+    )
+    p_pdf_segment.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_segment.add_argument(
+        "--tomo", type=int, help="número de tomo (si no, se infiere del nombre)"
+    )
+    p_pdf_segment.add_argument(
+        "--muestra", type=int, metavar="N", help="imprime los primeros N fallos"
+    )
+    p_pdf_segment.set_defaults(func=_cmd_pdf_segment)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

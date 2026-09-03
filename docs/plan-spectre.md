@@ -266,12 +266,18 @@ sin reparsear.
   queja ... en Carol ...") y verificación en la bitácora PR-06; PR-07 debería
   cerrar el número al armar los fallos y chequear solapamientos.
 
-- [ ] **PR-07 `[N]` Segmentador de fallos**
+- [x] **PR-07 `[N]` Segmentador de fallos**
   Del índice a los rangos de página; construcción de la cita `348:145`.
   Fallback por delimitadores si el índice no parsea.
   *Acepta:* 126 fallos, sin solapamientos, cubriendo de la página 1 a la 953.
   Dos trampas medidas: el fallo más largo ocupa **57 páginas** y es legítimo (el
   fallback no debe partirlo), y la mediana es de **4 páginas**.
+  Medido: **133 fallos** (129 carátulas del índice, 3 en varios fallos), 0
+  solapamientos, cobertura 1→956. **Más largo 57 y mediana 4 dan exactos** (el
+  método está bien); el total arrastra el gap de PR-06 (126 vs 129), a cerrar en
+  PR-08/09. El fallback corta por carátula en versalita, no por `FALLO DE LA
+  CORTE` (sobre-parte, D-2), y no parte el fallo de 57 páginas. Ver bitácora
+  PR-07.
 
 ### Fase 2 — Estructura del fallo (3 PRs)
 
@@ -433,5 +439,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-06 cerrados (03/09/2026).
-Próximo: **PR-07**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-07 cerrados (03/09/2026).
+Próximo: **PR-08**.
