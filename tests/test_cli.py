@@ -1,4 +1,4 @@
-"""PR-01/02/04/06/07 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
+"""PR-01/02/04/06-09 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
 
 from pathlib import Path
 
@@ -141,6 +141,26 @@ def test_pdf_segment_sin_numero_de_tomo_inferible(capsys, tmp_path):
     with pytest.raises(SystemExit) as exc:
         main(["pdf", "segment", str(pdf)])
     assert "--tomo" in str(exc.value)
+
+
+def test_pdf_sections_resume_el_tomo(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert main(["pdf", "sections", str(fixture), "--tomo", "348"]) == 0
+    out = capsys.readouterr().out
+    assert "con >=1 voto" in out
+    assert "líneas de contenido huérfanas" in out
+
+
+def test_pdf_sections_detalla_una_cita(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert (
+        main(["pdf", "sections", str(fixture), "--tomo", "348", "--cita", "348:34"])
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "mayoria" in out
+    assert "voto" in out
+    assert "Ricardo Luis Lorenzetti" in out
 
 
 def test_pdf_sin_accion_es_error():
