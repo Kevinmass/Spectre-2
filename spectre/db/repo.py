@@ -299,6 +299,14 @@ class Repo:
         self.conn.commit()
         return cur.rowcount
 
+    def set_texto_limpio(self, filas: Iterable[tuple[int, str]]) -> int:
+        """Actualiza `texto_limpio` en lote. Cada fila es `(pagina_id, texto)`.
+        Devuelve cuántas filas tocó."""
+        datos = [(texto, pagina_id) for pagina_id, texto in filas]
+        self.conn.executemany("UPDATE paginas SET texto_limpio = ? WHERE id = ?", datos)
+        self.conn.commit()
+        return len(datos)
+
     def get_pagina(self, tomo_id: int, pdf_page: int) -> Pagina | None:
         return _pagina(
             self.conn.execute(

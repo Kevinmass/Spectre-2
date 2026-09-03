@@ -251,6 +251,16 @@ def test_borrar_paginas(repo):
     assert repo.contar_paginas(tomo_id) == 0
 
 
+def test_set_texto_limpio_en_lote(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_paginas(tomo_id, [(1, None, "CRUDO uno"), (2, None, "CRUDO dos")])
+    p1, p2 = repo.list_paginas(tomo_id)
+    n = repo.set_texto_limpio([(p1.id, "limpio uno"), (p2.id, "limpio dos")])
+    assert n == 2
+    assert repo.get_pagina(tomo_id, 1).texto_limpio == "limpio uno"
+    assert repo.get_pagina(tomo_id, 1).texto_crudo == "CRUDO uno"  # el crudo queda
+
+
 # --- fallos ---------------------------------------------------------- #
 
 

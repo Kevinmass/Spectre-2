@@ -247,11 +247,15 @@ sin reparsear.
   offset (el valor medido es 6). Medido: 956/968 = 98,76%, offset 6, 0
   discrepancias.
 
-- [ ] **PR-05 `[N]` Limpieza de texto**
+- [x] **PR-05 `[N]` Limpieza de texto**
   Des-hifenado (`rese -\nñados` → `reseñados`), remoción de encabezados
   repetidos, normalización de versalitas (`caRLos FERnando RosEnkRantz`).
   *Acepta:* tests con casos reales tomados del Tomo 348; el conteo de palabras
   baja ~4,5% al des-hifenar una muestra.
+  Medido: des-hifenado une 7.709 de 7.712 guiones de corte del cuerpo; la
+  reducción es **2,3%**, no ~4,5% (el des-hifenado se verificó completo — ver
+  bitácora PR-05). El cuerpo limpio queda en 330.840 palabras, a 0,65% de las
+  332.999 que el plan fija para PR-11.
 
 - [ ] **PR-06 `[N]` Parser del índice de partes**
   Localiza el índice al final del tomo y extrae carátula → página.
@@ -424,5 +428,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02, PR-03 y PR-04 cerrados (03/09/2026).
-Próximo: **PR-05**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-05 cerrados (03/09/2026).
+Próximo: **PR-06**.

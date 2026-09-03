@@ -82,6 +82,22 @@ def test_pdf_stats_imprime_cobertura_y_offset(capsys):
     assert "6" in out
 
 
+def test_pdf_clean_imprime_reduccion(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_p1-16.pdf"
+    assert main(["pdf", "clean", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "palabras crudas" in out
+    assert "reducción" in out
+
+
+def test_pdf_clean_muestra_una_pagina(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_p1-16.pdf"
+    assert main(["pdf", "clean", str(fixture), "--muestra", "7"]) == 0
+    out = capsys.readouterr().out
+    assert "Luis Ernesto c/ Perrone" in out
+    assert not out.splitlines()[-1].startswith("DE JUSTICIA")
+
+
 def test_pdf_sin_accion_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["pdf"])
