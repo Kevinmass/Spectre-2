@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Kevin" }]
-dependencies = []
+dependencies = [
+    "pydantic-settings>=2.4",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -18,7 +20,8 @@ dev = [
     "ruff>=0.6",
 ]
 
-# El script de consola `spectre` se declara en PR-01, junto con la CLI real.
+[project.scripts]
+spectre = "spectre.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["spectre"]
