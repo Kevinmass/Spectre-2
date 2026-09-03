@@ -291,9 +291,15 @@ sin reparsear.
   (`(*) Sentencia del <fecha>. Ver fallo.`): quedan con `jueces=()`, marcados.
   Ver bitácora PR-08.
 
-- [ ] **PR-09 `[N]` Secciones: mayoría, votos, disidencias**
+- [x] **PR-09 `[N]` Secciones: mayoría, votos, disidencias**
   *Acepta:* un fallo con votos concurrentes conocido (p. 145 del Tomo 348) se
   parte en las secciones correctas. Ningún texto queda huérfano.
+  La p. 145 cae dentro del fallo "Loyola" (`348:113`, 52 pág): se parte en
+  dictamen + mayoría + tres votos (Rosenkrantz, Lorenzetti, García-Mansilla),
+  exacto. Los sumarios se **atribuyen** por su etiqueta `(Voto del juez X)`.
+  Huérfanas de contenido sobre 348 y 349: **0,10%** de las líneas (solo la 2ª
+  línea de un encabezado cuando el apellido dobla de renglón). Ver bitácora
+  PR-09.
 
 - [ ] **PR-10 `[V]` Extracción de citas**
   Regex sobre `Fallos: N:N`, tabla de relaciones fallo → fallo citado.
@@ -444,5 +450,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-08 cerrados (03/09/2026).
-Próximo: **PR-09**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-09 cerrados (03/09/2026).
+Próximo: **PR-10**.

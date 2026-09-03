@@ -83,7 +83,9 @@ with open("tests/fixtures/tomo348_cuerpo_p189-246.pdf", "wb") as f:
 —"Albarracín" (31–32), "N.N. ... Denunciante" (33), "Gobierno de la Ciudad de
 Buenos Aires" (34–35)— con `FALLO DE LA CORTE SUPREMA`, `Buenos Aires, <fecha>`,
 firma de los jueces, `Tribunal de origen:` y `Recurso de queja interpuesto por`.
-Prueba `spectre.corpus.fallo.structure` (PR-08) sin el tomo completo.
+"Gobierno de la Ciudad de Buenos Aires" además trae un voto concurrente
+(Lorenzetti). Prueba `spectre.corpus.fallo.structure` (PR-08) y
+`spectre.corpus.fallo.sections` (PR-09) sin el tomo completo.
 
 ```python
 from pypdf import PdfReader, PdfWriter

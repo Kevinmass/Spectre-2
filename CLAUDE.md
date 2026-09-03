@@ -17,14 +17,14 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-08)
+## Estado del código (al cerrar PR-09)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
-`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure`).
-El resto del árbol de la §4 del plan (`corpus/fallo/citations`, `chunking/`,
-`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
-código. La §9 del plan dice cuál es el próximo PR.
+`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
+`sections`). El resto del árbol de la §4 del plan (`corpus/fallo/citations`,
+`chunking/`, `embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía
+no hay código. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 

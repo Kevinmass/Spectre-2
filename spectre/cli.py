@@ -1,9 +1,10 @@
 """CLI de Spectre.
 
-Estado PR-08: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+Estado PR-09: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
 y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
-con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes). El
+con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
+`sections` parte cada fallo en dictamen / mayoría / votos / disidencias). El
 resto existe en `--help` pero **revienta si lo invocás** (D-05).
 """
 
@@ -288,6 +289,103 @@ def _cmd_pdf_meta(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_sections(args: argparse.Namespace) -> int:
+    import re
+
+    from spectre.corpus.fallo import (
+        parsear_indice,
+        partir_secciones,
+        segmentar,
+        texto_del_fallo,
+    )
+    from spectre.corpus.pdf import extraer_texto
+
+    marcador = re.compile(
+        r"^(FALLO DE LA CORTE SUPREMA|Considerando\s*:|Autos y [Vv]istos.*|"
+        r"Suprema Corte\s*:|Dictamen de la Procuraci.*|Vistos( los autos)?.*|"
+        r"Resulta\s*:|voto (?:del?|de la|de los)\b.*|"
+        r"[Dd]isidencia (?:del?|de la|de los)\b.*|-?[IVX]{1,6}-?\)?\s*$)",
+        re.IGNORECASE,
+    )
+
+    tomo = args.tomo or _tomo_de_nombre(args.pdf)
+    if tomo is None:
+        raise SystemExit("no pude inferir el número de tomo del nombre; pasá --tomo")
+
+    paginas = extraer_texto(args.pdf)
+    por_oficial = {p.pagina_oficial: p for p in paginas if p.pagina_oficial is not None}
+    fin_cuerpo = max(por_oficial)
+    try:
+        entradas = parsear_indice(args.pdf)
+    except ValueError:
+        entradas = None
+    r = segmentar(entradas, paginas, tomo_numero=tomo)
+
+    if args.cita:
+        objetivo = next((f for f in r.fallos if f.cita == args.cita), None)
+        if objetivo is None:
+            raise SystemExit(f"no hay un fallo con cita {args.cita}")
+        i = r.fallos.index(objetivo)
+        sig = r.fallos[i + 1].pagina_inicio if i + 1 < len(r.fallos) else None
+        texto = texto_del_fallo(
+            por_oficial,
+            pagina_inicio=objetivo.pagina_inicio,
+            pagina_inicio_siguiente=sig,
+            pagina_fin_cuerpo=fin_cuerpo,
+        )
+        print(f"Fallos: {objetivo.cita}  {objetivo.caratula}\n")
+        for s in partir_secciones(texto):
+            palabras = len(s.texto.split())
+            print(
+                f"  [{s.orden}] {s.tipo:11} {s.autor or '—':40} {palabras:5} palabras"
+            )
+        return 0
+
+    con_dict = con_voto = con_disi = una_sola = 0
+    huerfanas = total = 0
+    for i, f in enumerate(r.fallos):
+        sig = r.fallos[i + 1].pagina_inicio if i + 1 < len(r.fallos) else None
+        texto = texto_del_fallo(
+            por_oficial,
+            pagina_inicio=f.pagina_inicio,
+            pagina_inicio_siguiente=sig,
+            pagina_fin_cuerpo=fin_cuerpo,
+        )
+        secciones = partir_secciones(texto)
+        tipos = {s.tipo for s in secciones}
+        con_dict += "dictamen" in tipos
+        con_voto += "voto" in tipos
+        con_disi += "disidencia" in tipos
+        una_sola += len(secciones) <= 1
+        orig = [ln.strip() for ln in texto.splitlines() if ln.strip()]
+        cubierto: list[str] = []
+        for s in secciones:
+            cubierto += [ln.strip() for ln in s.texto.splitlines() if ln.strip()]
+        from collections import Counter
+
+        falta = Counter(orig) - Counter(cubierto)
+        huerfanas += sum(1 for ln in falta.elements() if not marcador.match(ln))
+        total += len(orig)
+
+    n = len(r.fallos)
+    filas = [
+        ("pdf", args.pdf),
+        ("fallos", n),
+        ("con dictamen", f"{con_dict}/{n}"),
+        ("con >=1 voto", f"{con_voto}/{n}"),
+        ("con >=1 disidencia", f"{con_disi}/{n}"),
+        ("una sola sección", f"{una_sola}/{n}"),
+        (
+            "líneas de contenido huérfanas",
+            f"{huerfanas}/{total}  ({huerfanas / total:.2%})",
+        ),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -376,6 +474,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="N", help="imprime los primeros N fallos"
     )
     p_pdf_meta.set_defaults(func=_cmd_pdf_meta)
+
+    p_pdf_sections = pdf_sub.add_parser(
+        "sections",
+        help="Parte cada fallo en dictamen / mayoría / votos / disidencias",
+    )
+    p_pdf_sections.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_sections.add_argument(
+        "--tomo", type=int, help="número de tomo (si no, se infiere del nombre)"
+    )
+    p_pdf_sections.add_argument(
+        "--cita", help="detalla las secciones de un fallo (ej. 348:113)"
+    )
+    p_pdf_sections.set_defaults(func=_cmd_pdf_sections)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")
