@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Kevin" }]
 dependencies = [
     "pydantic-settings>=2.4",
+    "pdfplumber>=0.11",
 ]
 
 [project.optional-dependencies]
@@ -36,4 +37,9 @@ select = ["E", "F", "I", "UP", "B", "W"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# `slow` se excluye por defecto: hoy es la medición de aceptación sobre el Tomo
+# 348 completo (~2 min, y necesita data/tomos/348.pdf). Correrla: `pytest -m slow`.
+addopts = "-ra -m 'not slow'"
+markers = [
+    "slow: medición sobre un fixture grande no versionado; fuera del run por defecto",
+]

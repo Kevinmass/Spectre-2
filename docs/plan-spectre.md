@@ -240,11 +240,12 @@ sin reparsear.
 
 ### Fase 1 — Del PDF al texto (4 PRs) · el corazón
 
-- [ ] **PR-04 `[N]` Extracción de texto y paginación oficial**
+- [x] **PR-04 `[N]` Extracción de texto y paginación oficial**
   Texto por página; detección del número de página oficial desde el encabezado;
   cálculo del offset del tomo.
   *Acepta:* sobre el Tomo 348, ≥95% de páginas con número detectado y un único
-  offset (el valor medido es 6).
+  offset (el valor medido es 6). Medido: 956/968 = 98,76%, offset 6, 0
+  discrepancias.
 
 - [ ] **PR-05 `[N]` Limpieza de texto**
   Des-hifenado (`rese -\nñados` → `reseñados`), remoción de encabezados
@@ -423,5 +424,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 y PR-03 cerrados (03/09/2026).
-Próximo: **PR-04**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02, PR-03 y PR-04 cerrados (03/09/2026).
+Próximo: **PR-05**.

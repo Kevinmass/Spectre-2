@@ -1,4 +1,6 @@
-"""PR-01/02 — `spectre --help` anda, `db` migra, los subcomandos vacíos revientan."""
+"""PR-01/02/04 — `--help` anda, `db` migra, `pdf stats` mide, los vacíos revientan."""
+
+from pathlib import Path
 
 import pytest
 
@@ -68,6 +70,21 @@ def test_db_status_marca_pendiente_y_aplicada(capsys, datos_tmp):
 def test_db_sin_accion_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["db"])
+    assert exc.value.code != 0
+
+
+def test_pdf_stats_imprime_cobertura_y_offset(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_p1-16.pdf"
+    assert main(["pdf", "stats", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "páginas" in out
+    assert "offset" in out
+    assert "6" in out
+
+
+def test_pdf_sin_accion_es_error():
+    with pytest.raises(SystemExit) as exc:
+        main(["pdf"])
     assert exc.value.code != 0
 
 

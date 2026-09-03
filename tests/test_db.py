@@ -230,6 +230,27 @@ def test_borrar_tomo_arrastra_las_paginas(repo, conn):
     assert repo.contar_paginas(tomo_id) == 0
 
 
+def test_insert_paginas_en_lote(repo):
+    tomo_id = repo.insert_tomo(348)
+    n = repo.insert_paginas(
+        tomo_id,
+        [(7, 1, "texto uno"), (8, 2, "texto dos"), (9, None, "sin oficial")],
+    )
+    assert n == 3
+    assert repo.contar_paginas(tomo_id) == 3
+    p9 = repo.get_pagina(tomo_id, 9)
+    assert p9.pagina_oficial is None
+    assert p9.texto_crudo == "sin oficial"
+    assert p9.texto_limpio is None
+
+
+def test_borrar_paginas(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_paginas(tomo_id, [(1, None, "a"), (2, None, "b")])
+    assert repo.borrar_paginas(tomo_id) == 2
+    assert repo.contar_paginas(tomo_id) == 0
+
+
 # --- fallos ---------------------------------------------------------- #
 
 
