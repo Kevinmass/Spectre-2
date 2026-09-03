@@ -41,9 +41,12 @@ def _dump_esquema(conn):
 # --- migraciones -------------------------------------------------------- #
 
 
+MIGRACIONES = ["0001_initial", "0002_jobs_estado_check"]
+
+
 def test_migrate_crea_el_esquema_completo(conn):
     aplicadas = migrate(conn)
-    assert aplicadas == ["0001_initial"]
+    assert aplicadas == MIGRACIONES
     esperadas = {
         "tomos",
         "paginas",
@@ -58,7 +61,7 @@ def test_migrate_crea_el_esquema_completo(conn):
 
 
 def test_migrate_es_idempotente(conn):
-    assert migrate(conn) == ["0001_initial"]
+    assert migrate(conn) == MIGRACIONES
     esquema_1 = _dump_esquema(conn)
 
     assert migrate(conn) == []  # nada pendiente, sin error
@@ -66,13 +69,13 @@ def test_migrate_es_idempotente(conn):
     assert _dump_esquema(conn) == esquema_1
 
     filas = conn.execute("SELECT count(*) FROM _migraciones").fetchone()[0]
-    assert filas == 1
+    assert filas == len(MIGRACIONES)
 
 
 def test_migrate_sobre_base_ya_migrada_en_otra_conexion(tmp_path):
     ruta = tmp_path / "spectre.db"
     c1 = connect(ruta)
-    assert migrate(c1) == ["0001_initial"]
+    assert migrate(c1) == MIGRACIONES
     c1.close()
 
     c2 = connect(ruta)
@@ -80,9 +83,18 @@ def test_migrate_sobre_base_ya_migrada_en_otra_conexion(tmp_path):
     c2.close()
 
 
-def test_hay_una_sola_migracion_por_ahora():
+def test_migraciones_disponibles_en_orden():
     nombres = [p.name for p in migraciones_disponibles()]
-    assert nombres == ["0001_initial.sql"]
+    assert nombres == [f"{v}.sql" for v in MIGRACIONES]
+
+
+def test_jobs_estado_tiene_check(conn):
+    migrate(conn)
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO jobs (tipo, estado, creado_at) "
+            "VALUES ('x', 'inventado', '2026-01-01T00:00:00+00:00')"
+        )
 
 
 # --- tomos ------------------------------------------------------------ #

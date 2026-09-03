@@ -232,7 +232,7 @@ sin reparsear.
   *Acepta:* crear la base, insertar un tomo y leerlo; test de idempotencia de la
   migración.
 
-- [ ] **PR-03 `[N]` Runner de jobs durable**
+- [x] **PR-03 `[N]` Runner de jobs durable**
   Cola en SQLite, un solo proceso, estados y reintentos. Sin threads, sin
   control de recursos casero.
   *Acepta:* matar el proceso a mitad de un job y reanudarlo sin perder ni
@@ -423,4 +423,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 cerrado (03/09/2026). Próximo: **PR-03**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 y PR-03 cerrados (03/09/2026).
+Próximo: **PR-04**.
