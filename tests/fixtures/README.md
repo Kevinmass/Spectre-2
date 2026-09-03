@@ -76,3 +76,28 @@ for pp in (195, 196, 205, 250, 251, 252):
 with open("tests/fixtures/tomo348_cuerpo_p189-246.pdf", "wb") as f:
     w.write(f)
 ```
+
+## `tomo348_cuerpo_p31-40.pdf`
+
+`pdf_page` 37–42 del Tomo 348 (oficiales 31–36): tres fallos cortos y completos
+—"Albarracín" (31–32), "N.N. ... Denunciante" (33), "Gobierno de la Ciudad de
+Buenos Aires" (34–35)— con `FALLO DE LA CORTE SUPREMA`, `Buenos Aires, <fecha>`,
+firma de los jueces, `Tribunal de origen:` y `Recurso de queja interpuesto por`.
+Prueba `spectre.corpus.fallo.structure` (PR-08) sin el tomo completo.
+
+```python
+from pypdf import PdfReader, PdfWriter
+
+r = PdfReader("data/tomos/348.pdf")
+w = PdfWriter()
+for pp in range(37, 43):
+    w.add_page(r.pages[pp - 1])
+with open("tests/fixtures/tomo348_cuerpo_p31-40.pdf", "wb") as f:
+    w.write(f)
+```
+
+## Tomos completos (no versionados)
+
+`data/tomos/348.pdf` y `data/tomos/349.pdf` (Fallos, tomos 348 y 349). Los usan
+los tests `slow`; el 349 se agregó en PR-08 para medir los criterios de
+aceptación sobre dos tomos y no sesgar con un solo archivo.

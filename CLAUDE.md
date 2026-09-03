@@ -17,14 +17,14 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-07)
+## Estado del código (al cerrar PR-08)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
-`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter`). El resto del
-árbol de la §4 del plan (`corpus/fallo/structure` y sig., `chunking/`, `embed/`,
-`index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9
-del plan dice cuál es el próximo PR.
+`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure`).
+El resto del árbol de la §4 del plan (`corpus/fallo/citations`, `chunking/`,
+`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
+código. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -120,6 +120,11 @@ de aceptación de las Fases 1 a 3 son números medidos sobre ese tomo: offset de
 página 6, 126 entradas en el índice, fallo más largo 57 páginas, mediana 4
 páginas, ~1.041 chunks, 887 citas. Un resultado lejos de esos números indica que
 algo aguas arriba se rompió.
+
+Desde PR-08 hay también `data/tomos/349.pdf` (Tomo 349, el más reciente). Cuando
+un PR mida algo sobre tomo real, correrlo sobre **los dos** para no sesgar con un
+solo archivo; los números del plan siguen anclados al 348. Ninguno de los dos se
+versiona (gitignored).
 
 ## Lo que hay en `legacy/`
 

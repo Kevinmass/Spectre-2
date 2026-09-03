@@ -162,7 +162,7 @@ def segmentar_desde_indice(
 
 
 def _linea_es_caratula(linea: str) -> bool:
-    con_bordes = f" {linea.strip()} "
+    con_bordes = f" {linea.strip()} ".lower()
     if " c/ " not in con_bordes and " s/ " not in con_bordes:
         return False
     palabras = _PALABRA.findall(linea)
