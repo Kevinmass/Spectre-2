@@ -17,12 +17,14 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-18)
+## Estado del código (al cerrar PR-19)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
-migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
-`get_chunk` y `filtrar_chunks`; `tomos.calidad` ya está en el esquema desde
-`0001_initial.sql`, pero todavía no la llena nadie), `spectre/jobs/runner.py`,
+migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
+(PR-19: el pipeline completo — descargar → extraer → limpiar → segmentar →
+estructurar → fragmentar → embeber → indexar — como una cadena de jobs, uno
+por etapa por tomo; `tomos.estado` es el progreso consultable, con su
+vocabulario fijado por el CHECK de `0004_tomos_estado_check.sql`),
 `spectre/corpus/pdf/` (`extract` + `clean` + `quality`: clasifica un tomo en
 `digital` / `requiere_ocr` según caracteres por página), `spectre/corpus/fallo/`
 (`index_parser` + `segmenter` + `structure` + `sections` + `citations`),
@@ -75,6 +77,10 @@ próximo PR.
 - Job runner: el handler recibe `(conn, job)`, escribe solo por esa conexión y
   **no** llama `commit()` / `rollback()`. El `Runner` es dueño del límite
   transaccional; un handler que commitea rompe la garantía "sin duplicar" (D-3).
+  Por eso los handlers de `jobs/pipeline.py` usan `Repo(conn,
+  auto_commit=False)` (PR-19): con eso, cada escritura queda pendiente hasta
+  que el `Runner` cierra la transacción del job entero. `Repo(conn)` a secas
+  (sin el argumento) sigue commiteando por su cuenta, para el CLI y los tests.
 - **Regla de dependencias:** `corpus/` no importa `index/` ni `embed/`.
   `search/` no importa `corpus/`. `chunking/` consume `corpus/fallo` (secciones
   + texto por página) pero no importa `embed/` ni `index/`. `index/` recibe
@@ -114,8 +120,8 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   - `spectre db migrate` — crea `data/spectre.db` y aplica las migraciones
     pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
   - `spectre csjn catalog [--muestra N]` — lista los tomos del sitio oficial de
-    la CSJN (número, volumen, año, id CSJN); mide, no persiste (persistir es
-    de PR-19 en adelante). Necesita red real.
+    la CSJN (número, volumen, año, id CSJN); mide, no persiste (`spectre
+    ingest` es quien persiste, vía `--csjn-tomo-id`). Necesita red real.
   - `spectre csjn download <tomo_id> <destino> [--forzar]` — baja el PDF de
     un tomo (el `tomo_id` lo da `csjn catalog`) con reintentos y caché: si
     `destino` ya existe no pide nada, salvo `--forzar`. Necesita red real.
@@ -138,7 +144,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   - `spectre pdf chunks <pdf> [--tomo N] [--cita 348:34] [--objetivo N]
     [--solape N]` — fragmenta cada sección en ventanas de ~400 palabras con 80
     de solape; verifica que ningún chunk cruza el borde de sección (PR-11).
-  - Todos los `spectre pdf …` **miden, no persisten** (llenar SQLite es PR-19).
+  - Todos los `spectre pdf …` **miden, no persisten**: son las mismas
+    funciones que corre `spectre ingest`, pero sin tocar la base (útiles para
+    ver un número de un tomo suelto sin registrar nada). Persistir en SQLite
+    es `spectre ingest` (PR-19), no estos.
   - `spectre embed status` — modelo de la config y cuántos chunks de la base
     están pendientes de (re)embedding con ese modelo (criterio de PR-12).
     `spectre embed probe "<texto>" [--modelo M]` — carga el modelo real y embebe
@@ -152,8 +161,19 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     [--solo-lexico]` — fusiona léxico + vectorial por RRF (PR-15); embebe la
     consulta con el modelo real salvo que se pase `--solo-lexico` (no necesita
     `[embed]` en ese caso).
-  - `spectre ingest` / `serve` — declarados pero revientan (los implementan
-    PR-19 / PR-20). Ningún stub que reporte éxito.
+  - `spectre ingest <numero> [--pdf RUTA] [--csjn-tomo-id ID]` — corre el
+    pipeline completo sobre un tomo (descargar → extraer → limpiar →
+    segmentar → estructurar → fragmentar → embeber → indexar) y persiste todo
+    en SQLite + LanceDB (PR-19). `--pdf` para subida manual (D-9, salta la
+    descarga); `--csjn-tomo-id` para bajarlo de la CSJN (lo da `csjn
+    catalog`). Reanudable: correrlo de nuevo retoma desde `tomos.estado` sin
+    reprocesar lo que ya esté hecho, y si una etapa falla se frena ahí y lo
+    dice (no reintenta esa etapa solo — hay que arreglar y volver a correr).
+    Un tomo que mide `requiere_ocr` (PR-18) se frena después de `extraer`
+    (D-10): la "cola visible" son los tomos con `estado='extraido'` y
+    `calidad='requiere_ocr'`.
+  - `serve` — declarado pero revienta (lo implementa PR-20). Ningún stub que
+    reporte éxito.
 
 ## Tests
 

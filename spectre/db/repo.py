@@ -41,6 +41,13 @@ _TOMO_CAMPOS_MUTABLES = frozenset(
         "indexado_at",
     }
 )
+#: Columnas de `fallos` que `actualizar_fallo` puede tocar. `caratula`, `cita`
+#: y el rango de página los pone `insert_fallo` (son la identidad del fallo,
+#: los fija el segmentador); esto es lo que llena PR-19 al estructurar (fecha
+#: / jueces / tribunal / recurso).
+_FALLO_CAMPOS_MUTABLES = frozenset(
+    {"fecha", "tribunal_origen", "tipo_recurso", "jueces"}
+)
 
 
 def ahora_iso() -> str:
@@ -158,6 +165,16 @@ class Fallo:
 
 
 @dataclass(frozen=True, slots=True)
+class Seccion:
+    id: int
+    fallo_id: int
+    tipo: str
+    autor: str | None
+    orden: int
+    texto: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class Chunk:
     """Una fila de `chunks`. `modelo_embedding` / `embedding_at` en `None` = el
     chunk todavía no se embebió (o se embebió con otro modelo y hay que
@@ -185,6 +202,10 @@ def _fallo(row: sqlite3.Row | None) -> Fallo | None:
     return Fallo(**row) if row is not None else None
 
 
+def _seccion(row: sqlite3.Row | None) -> Seccion | None:
+    return Seccion(**row) if row is not None else None
+
+
 def _chunk(row: sqlite3.Row | None) -> Chunk | None:
     return Chunk(**row) if row is not None else None
 
@@ -197,12 +218,23 @@ def _chunk(row: sqlite3.Row | None) -> Chunk | None:
 class Repo:
     """Operaciones de datos sobre una conexión ya migrada.
 
-    Cada escritura hace `commit()` por su cuenta: todavía no hay un job runner
-    que quiera agrupar varias en una transacción (eso llega en PR-03).
-    """
+    Por default cada escritura hace `commit()` por su cuenta: es el modo
+    cómodo para el CLI y la mayoría de los tests. **Dentro de un handler del
+    job runner (PR-19) esto está prohibido** (`jobs/runner.py`: "el handler
+    ... no llama commit()/rollback(); el Runner es dueño del límite
+    transaccional"): un `Repo` que commitea ahí rompe la garantía de "sin
+    duplicar" de D-3, porque el `with self.conn:` del runner ya no puede hacer
+    rollback de lo que un commit de acá adentro volvió permanente. Por eso
+    `auto_commit=False` deja cada escritura pendiente — el runner es quien
+    cierra la transacción entera al final del job."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: sqlite3.Connection, *, auto_commit: bool = True) -> None:
         self.conn = conn
+        self.auto_commit = auto_commit
+
+    def _commit(self) -> None:
+        if self.auto_commit:
+            self.conn.commit()
 
     # -- tomos ------------------------------------------------------------ #
 
@@ -237,7 +269,7 @@ class Repo:
                 indexado_at,
             ),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def get_tomo(self, tomo_id: int) -> Tomo | None:
@@ -272,7 +304,7 @@ class Repo:
             f"UPDATE tomos SET {asignaciones} WHERE id = ?",
             (*campos.values(), tomo_id),
         )
-        self.conn.commit()
+        self._commit()
 
     # -- páginas -------------------------------------------------------- #
 
@@ -290,7 +322,7 @@ class Repo:
             " texto_limpio) VALUES (?, ?, ?, ?, ?)",
             (tomo_id, pdf_page, pagina_oficial, texto_crudo, texto_limpio),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def insert_paginas(
@@ -310,13 +342,13 @@ class Repo:
             "VALUES (?, ?, ?, ?)",
             datos,
         )
-        self.conn.commit()
+        self._commit()
         return len(datos)
 
     def borrar_paginas(self, tomo_id: int) -> int:
         """Borra todas las páginas del tomo. Devuelve cuántas borró."""
         cur = self.conn.execute("DELETE FROM paginas WHERE tomo_id = ?", (tomo_id,))
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     def set_texto_limpio(self, filas: Iterable[tuple[int, str]]) -> int:
@@ -324,7 +356,7 @@ class Repo:
         Devuelve cuántas filas tocó."""
         datos = [(texto, pagina_id) for pagina_id, texto in filas]
         self.conn.executemany("UPDATE paginas SET texto_limpio = ? WHERE id = ?", datos)
-        self.conn.commit()
+        self._commit()
         return len(datos)
 
     def get_pagina(self, tomo_id: int, pdf_page: int) -> Pagina | None:
@@ -384,7 +416,7 @@ class Repo:
                 jueces,
             ),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def get_fallo(self, fallo_id: int) -> Fallo | None:
@@ -408,6 +440,80 @@ class Repo:
             )
         ]
 
+    def actualizar_fallo(self, fallo_id: int, **campos: object) -> None:
+        """Actualiza los metadatos estructurados de un fallo (PR-19: la etapa
+        `estructurar`). Columna inexistente o no mutable → `ValueError`, igual
+        que `actualizar_tomo`."""
+        if not campos:
+            return
+        desconocidos = set(campos) - _FALLO_CAMPOS_MUTABLES
+        if desconocidos:
+            raise ValueError(f"columnas no actualizables: {sorted(desconocidos)}")
+        asignaciones = ", ".join(f"{col} = ?" for col in campos)
+        self.conn.execute(
+            f"UPDATE fallos SET {asignaciones} WHERE id = ?",
+            (*campos.values(), fallo_id),
+        )
+        self._commit()
+
+    def borrar_fallos(self, tomo_id: int) -> int:
+        """Borra todos los fallos del tomo (y en cascada sus secciones, chunks
+        y citas — las FK del esquema). Reprocesar la segmentación de un tomo
+        (reintento del job, PR-19) no acumula fallos duplicados. Devuelve
+        cuántos borró."""
+        cur = self.conn.execute("DELETE FROM fallos WHERE tomo_id = ?", (tomo_id,))
+        self._commit()
+        return cur.rowcount
+
+    # -- secciones ------------------------------------------------------ #
+
+    def insert_secciones(
+        self,
+        fallo_id: int,
+        filas: Iterable[tuple[str, str | None, int, str]],
+    ) -> list[int]:
+        """Inserta las secciones de un fallo en orden. Cada fila es `(tipo,
+        autor, orden, texto)`. Devuelve los `id` asignados, en el mismo orden
+        que `filas` — el llamador (PR-19, etapa `fragmentar`) los necesita
+        para mapear `Chunk.seccion_orden` (el índice 0-based que da
+        `sections.partir_secciones`) al `seccion_id` real de la base antes de
+        `insert_chunks`. `executemany` no da `lastrowid` por fila, así que va
+        una inserción por vez."""
+        ids = []
+        for tipo, autor, orden, texto in filas:
+            cur = self.conn.execute(
+                "INSERT INTO secciones (fallo_id, tipo, autor, orden, texto)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (fallo_id, tipo, autor, orden, texto),
+            )
+            ids.append(int(cur.lastrowid))
+        self._commit()
+        return ids
+
+    def get_seccion(self, seccion_id: int) -> Seccion | None:
+        return _seccion(
+            self.conn.execute(
+                "SELECT * FROM secciones WHERE id = ?", (seccion_id,)
+            ).fetchone()
+        )
+
+    def list_secciones_de_fallo(self, fallo_id: int) -> list[Seccion]:
+        return [
+            Seccion(**row)
+            for row in self.conn.execute(
+                "SELECT * FROM secciones WHERE fallo_id = ? ORDER BY orden",
+                (fallo_id,),
+            )
+        ]
+
+    def borrar_secciones_de_fallo(self, fallo_id: int) -> int:
+        """Borra las secciones de un fallo (y en cascada sus chunks). Mismo
+        propósito que `borrar_fallos`: reintentar la etapa `fragmentar` no
+        acumula secciones ni chunks duplicados."""
+        cur = self.conn.execute("DELETE FROM secciones WHERE fallo_id = ?", (fallo_id,))
+        self._commit()
+        return cur.rowcount
+
     # -- chunks -------------------------------------------------------- #
 
     def insert_chunks(
@@ -428,7 +534,7 @@ class Repo:
             " VALUES (?, ?, ?, ?, ?)",
             datos,
         )
-        self.conn.commit()
+        self._commit()
         return len(datos)
 
     def get_chunk(self, chunk_id: int) -> Chunk | None:
@@ -445,6 +551,19 @@ class Repo:
                 "SELECT * FROM chunks WHERE fallo_id = ?"
                 " ORDER BY seccion_id, orden, id",
                 (fallo_id,),
+            )
+        ]
+
+    def list_chunks_de_tomo(self, tomo_id: int) -> list[Chunk]:
+        """Los chunks de todos los fallos de un tomo (join por `fallo_id`).
+        Lo usa PR-19 para acotar la etapa `embeber` a un solo tomo —
+        `chunks_pendientes_de_embedding` de abajo mira la base entera."""
+        return [
+            Chunk(**row)
+            for row in self.conn.execute(
+                "SELECT c.* FROM chunks c JOIN fallos f ON f.id = c.fallo_id"
+                " WHERE f.tomo_id = ? ORDER BY c.fallo_id, c.seccion_id, c.orden",
+                (tomo_id,),
             )
         ]
 
@@ -526,5 +645,5 @@ class Repo:
             "UPDATE chunks SET modelo_embedding = ?, embedding_at = ? WHERE id = ?",
             datos,
         )
-        self.conn.commit()
+        self._commit()
         return len(datos)

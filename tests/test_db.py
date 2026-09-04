@@ -49,7 +49,12 @@ def _dump_esquema(conn):
 # --- migraciones -------------------------------------------------------- #
 
 
-MIGRACIONES = ["0001_initial", "0002_jobs_estado_check", "0003_chunks_fts"]
+MIGRACIONES = [
+    "0001_initial",
+    "0002_jobs_estado_check",
+    "0003_chunks_fts",
+    "0004_tomos_estado_check",
+]
 
 
 def test_migrate_crea_el_esquema_completo(conn):
@@ -104,6 +109,30 @@ def test_jobs_estado_tiene_check(conn):
             "INSERT INTO jobs (tipo, estado, creado_at) "
             "VALUES ('x', 'inventado', '2026-01-01T00:00:00+00:00')"
         )
+
+
+def test_tomos_estado_tiene_check(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_tomo(1, estado="inventado")
+
+
+def test_tomos_estado_acepta_todo_el_vocabulario_del_pipeline(repo):
+    # PR-19 congela el vocabulario en 0004_tomos_estado_check.sql; si esto
+    # revienta, el CHECK y `jobs/pipeline.py` (ETAPAS) se desincronizaron.
+    for i, estado in enumerate(
+        (
+            "registrado",
+            "descargado",
+            "extraido",
+            "limpio",
+            "segmentado",
+            "estructurado",
+            "fragmentado",
+            "embebido",
+            "indexado",
+        )
+    ):
+        repo.insert_tomo(i + 1, estado=estado)
 
 
 # --- tomos ------------------------------------------------------------ #
@@ -324,6 +353,109 @@ def test_fallo_sin_tomo_viola_foreign_key(repo):
         repo.insert_fallo(999, "huérfano")
 
 
+def test_actualizar_fallo(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.actualizar_fallo(
+        fid,
+        fecha="2025-04-15",
+        jueces='["Rosatti"]',
+        tribunal_origen="Cámara Federal",
+        tipo_recurso="extraordinario",
+    )
+    fallo = repo.get_fallo(fid)
+    assert fallo.fecha == "2025-04-15"
+    assert fallo.jueces == '["Rosatti"]'
+    assert fallo.tribunal_origen == "Cámara Federal"
+    assert fallo.tipo_recurso == "extraordinario"
+    assert fallo.caratula == "A c/ B"  # no tocado
+
+
+def test_actualizar_fallo_rechaza_columnas_no_mutables(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B")
+    with pytest.raises(ValueError):
+        repo.actualizar_fallo(fid, caratula="otra cosa")
+    with pytest.raises(ValueError):
+        repo.actualizar_fallo(fid, columna_fantasma=1)
+
+
+def test_actualizar_fallo_sin_campos_es_noop(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B")
+    repo.actualizar_fallo(fid)
+    assert repo.get_fallo(fid).caratula == "A c/ B"
+
+
+def test_borrar_fallos(repo):
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.insert_fallo(tomo_id, "C c/ D", cita="348:2")
+    assert repo.borrar_fallos(tomo_id) == 2
+    assert repo.list_fallos(tomo_id) == []
+
+
+def test_borrar_fallos_arrastra_secciones_y_chunks(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    (seccion_id,) = repo.insert_secciones(fid, [("mayoria", None, 0, "texto")])
+    repo.insert_chunks(fid, [(seccion_id, 0, "un chunk", None)])
+
+    assert repo.borrar_fallos(tomo_id) == 1
+    assert repo.list_secciones_de_fallo(fid) == []
+    assert repo.contar_chunks() == 0
+
+
+# --- secciones (PR-19) -------------------------------------------------- #
+
+
+def test_insert_secciones_devuelve_ids_en_orden(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    ids = repo.insert_secciones(
+        fid,
+        [
+            ("dictamen", None, 0, "texto dictamen"),
+            ("mayoria", None, 1, "texto mayoria"),
+            ("voto", "Rosatti", 2, "texto voto"),
+        ],
+    )
+    assert len(ids) == 3
+    assert ids == sorted(set(ids))  # tres ids distintos, sin repetir
+
+    secciones = repo.list_secciones_de_fallo(fid)
+    assert [s.tipo for s in secciones] == ["dictamen", "mayoria", "voto"]
+    assert secciones[2].autor == "Rosatti"
+    assert repo.get_seccion(ids[1]).texto == "texto mayoria"
+
+
+def test_seccion_tipo_invalido_es_rechazado(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_secciones(fid, [("inventado", None, 0, "x")])
+
+
+def test_seccion_sin_fallo_viola_foreign_key(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_secciones(999, [("mayoria", None, 0, "x")])
+
+
+def test_borrar_secciones_de_fallo_arrastra_chunks(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    (seccion_id,) = repo.insert_secciones(fid, [("mayoria", None, 0, "texto")])
+    repo.insert_chunks(fid, [(seccion_id, 0, "un chunk", None)])
+
+    assert repo.borrar_secciones_de_fallo(fid) == 1
+    assert repo.list_secciones_de_fallo(fid) == []
+    assert repo.contar_chunks() == 0
+
+
+def test_get_seccion_inexistente_es_none(repo):
+    assert repo.get_seccion(999) is None
+
+
 # --- chunks y registro del modelo de embedding (PR-12) ---------------- #
 
 
@@ -407,6 +539,26 @@ def test_get_chunk(repo):
 
 def test_get_chunk_inexistente_es_none(repo):
     assert repo.get_chunk(999) is None
+
+
+def test_list_chunks_de_tomo_junta_varios_fallos(repo):
+    tomo_id = repo.insert_tomo(348)
+    f1 = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    f2 = repo.insert_fallo(tomo_id, "C c/ D", cita="348:2")
+    otro_tomo = repo.insert_tomo(349)
+    f3 = repo.insert_fallo(otro_tomo, "E c/ F", cita="349:1")
+    repo.insert_chunks(f1, [(None, 0, "chunk f1", None)])
+    repo.insert_chunks(f2, [(None, 0, "chunk f2a", None), (None, 1, "chunk f2b", None)])
+    repo.insert_chunks(f3, [(None, 0, "chunk de otro tomo", None)])
+
+    chunks = repo.list_chunks_de_tomo(tomo_id)
+    assert len(chunks) == 3
+    assert {c.texto for c in chunks} == {"chunk f1", "chunk f2a", "chunk f2b"}
+
+
+def test_list_chunks_de_tomo_sin_chunks_es_vacio(repo):
+    tomo_id = repo.insert_tomo(348)
+    assert repo.list_chunks_de_tomo(tomo_id) == []
 
 
 # --- filtrar_chunks (PR-15: filtros de la búsqueda híbrida) ------------- #
@@ -499,6 +651,51 @@ def test_filtrar_chunks_sin_seccion_no_matchea_filtro_de_tipo(repo):
     fallo_id = _fallo_con_chunks(repo, 1)  # seccion_id NULL
     chunk_id = repo.list_chunks_de_fallo(fallo_id)[0].id
     assert repo.filtrar_chunks([chunk_id], tipo_seccion="mayoria") == set()
+
+
+# --- auto_commit=False (PR-19: uso dentro de un handler del job runner) - #
+
+
+def test_auto_commit_false_no_commitea_las_escrituras(conn):
+    migrate(conn)
+    repo = Repo(conn, auto_commit=False)
+    repo.insert_tomo(348)
+
+    # otra conexión al mismo archivo no ve nada: nadie commiteó todavía.
+    otra = connect(conn.execute("PRAGMA database_list").fetchone()["file"])
+    try:
+        assert otra.execute("SELECT count(*) FROM tomos").fetchone()[0] == 0
+    finally:
+        otra.close()
+
+    conn.commit()  # lo que sí commitea, acá, es quien orquesta (el Runner)
+    otra = connect(conn.execute("PRAGMA database_list").fetchone()["file"])
+    try:
+        assert otra.execute("SELECT count(*) FROM tomos").fetchone()[0] == 1
+    finally:
+        otra.close()
+
+
+def test_auto_commit_false_se_puede_revertir_con_rollback(conn):
+    migrate(conn)
+    repo = Repo(conn, auto_commit=False)
+    tomo_id = repo.insert_tomo(348)
+    repo.insert_pagina(tomo_id, 1, texto_crudo="x")
+    conn.rollback()
+    assert repo.get_tomo(tomo_id) is None  # todo lo pendiente se descartó
+
+
+def test_auto_commit_true_por_default(conn):
+    migrate(conn)
+    repo = Repo(conn)  # sin auto_commit: el modo cómodo de siempre
+    assert repo.auto_commit is True
+    repo.insert_tomo(348)
+
+    otra = connect(conn.execute("PRAGMA database_list").fetchone()["file"])
+    try:
+        assert otra.execute("SELECT count(*) FROM tomos").fetchone()[0] == 1
+    finally:
+        otra.close()
 
 
 # --- conexión ------------------------------------------------------------ #
