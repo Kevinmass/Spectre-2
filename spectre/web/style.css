@@ -7,6 +7,11 @@
   --borde: #d8d4cb;
   --acento: #2f4f3f;
   --acento-texto: #ffffff;
+  --marca: #fbe8a0;
+  --mayoria: #2f4f3f;
+  --voto: #35577a;
+  --disidencia: #9c3b2e;
+  --dictamen: #6b6558;
 }
 
 * {
@@ -93,4 +98,107 @@ th {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.buscador {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.buscador input {
+  flex: 1;
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+
+.buscador input:disabled,
+.buscador button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.buscador button {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  background: var(--acento);
+  color: var(--acento-texto);
+  cursor: pointer;
+}
+
+.resultados {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.resultado {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+}
+
+.resultado-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cita {
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-mayoria {
+  background: var(--mayoria);
+}
+
+.badge-voto {
+  background: var(--voto);
+}
+
+.badge-disidencia {
+  background: var(--disidencia);
+}
+
+.badge-dictamen {
+  background: var(--dictamen);
+}
+
+.caratula {
+  margin: 0.4rem 0 0;
+  color: var(--texto-tenue);
+  font-style: italic;
+}
+
+.extracto {
+  margin: 0.5rem 0 0;
+}
+
+.extracto mark {
+  background: var(--marca);
+  color: inherit;
+  border-radius: 2px;
 }
