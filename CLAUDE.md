@@ -17,14 +17,15 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-10)
+## Estado del código (al cerrar PR-11)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
 `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
-`sections` + `citations`). El resto del árbol de la §4 del plan (`chunking/`,
-`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
-código. La §9 del plan dice cuál es el próximo PR.
+`sections` + `citations`), `spectre/chunking/` (`chunker`: ventanas de ~400
+palabras por sección). El resto del árbol de la §4 del plan (`embed/`, `index/`,
+`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9 del plan
+dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -61,7 +62,9 @@ código. La §9 del plan dice cuál es el próximo PR.
   **no** llama `commit()` / `rollback()`. El `Runner` es dueño del límite
   transaccional; un handler que commitea rompe la garantía "sin duplicar" (D-3).
 - **Regla de dependencias:** `corpus/` no importa `index/` ni `embed/`.
-  `search/` no importa `corpus/`. Todo cruce pasa por `db/repo.py`.
+  `search/` no importa `corpus/`. `chunking/` consume `corpus/fallo` (secciones
+  + texto por página) pero no importa `embed/` ni `index/`. Todo cruce con la
+  base pasa por `db/repo.py`.
 - El modelo de embeddings va detrás de `embed/base.py` y **se registra por
   chunk** (`chunks.modelo_embedding`), para saber qué reindexar si cambia.
 - El parseo y el embedding están separados: texto limpio y chunks viven en
@@ -99,6 +102,9 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
     en dictamen / mayoría / votos / disidencias (PR-09).
   - `spectre pdf citations <pdf> [--tomo N] [--cita 348:189]` — extrae las citas
     `Fallos: N:N` a precedentes; mide referencias y relación fallo→fallo (PR-10).
+  - `spectre pdf chunks <pdf> [--tomo N] [--cita 348:34] [--objetivo N]
+    [--solape N]` — fragmenta cada sección en ventanas de ~400 palabras con 80
+    de solape; verifica que ningún chunk cruza el borde de sección (PR-11).
   - Todos los `spectre pdf …` **miden, no persisten** (llenar SQLite es PR-19).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.

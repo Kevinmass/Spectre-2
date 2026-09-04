@@ -313,12 +313,19 @@ sin reparsear.
 
 ### Fase 3 — Índice y búsqueda (5 PRs)
 
-- [ ] **PR-11 `[N]` Chunker consciente de secciones**
+- [x] **PR-11 `[N]` Chunker consciente de secciones**
   Nunca cruza el borde de D-4. Hereda cita, sección y página.
   *Acepta:* ningún chunk con texto de dos secciones. Referencia medida: el
   cuerpo del Tomo 348 des-hifenado tiene **332.999 palabras**, que a 400 palabras
   con 80 de solape dan **~1.041 chunks**. Un resultado muy lejos de ahí indica
   que la limpieza o la segmentación se rompieron.
+  Medido: **1.112 chunks** en el Tomo 348 (349: 1.087). El chunker fragmenta
+  **una sección por vez**, así que ningún chunk cruza el borde por construcción
+  — **0 chunks fuera de su sección** en ambos tomos. La referencia global real
+  es 330.840/320 = 1.033 (el cuerpo mide 330.840 palabras, como en PR-05, no
+  332.999); el +7,6 % es el redondeo por sección (197 secciones). El 98,8 % de
+  los chunks hereda su `pagina_oficial` ubicándose en el texto por página; el
+  resto cae en la página de inicio del fallo. Ver bitácora PR-11.
 
 - [ ] **PR-12 `[N]` Interfaz de embeddings + implementación local**
   `EmbeddingModel`, implementación con sentence-transformers, registro del
@@ -456,5 +463,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-10 cerrados (03/09/2026).
-Próximo: **PR-11**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-11 cerrados (03/09/2026).
+Próximo: **PR-12**.

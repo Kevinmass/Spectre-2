@@ -1,4 +1,4 @@
-"""PR-01/02/04/06-10 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
+"""PR-01/02/04/06-11 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
 
 from pathlib import Path
 
@@ -188,6 +188,33 @@ def test_pdf_citations_cita_inexistente_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["pdf", "citations", str(fixture), "--tomo", "348", "--cita", "999:1"])
     assert "999:1" in str(exc.value)
+
+
+def test_pdf_chunks_resume_el_tomo(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert main(["pdf", "chunks", str(fixture), "--tomo", "348"]) == 0
+    out = capsys.readouterr().out
+    assert "chunks" in out
+    assert "chunks fuera de su secci" in out
+    assert "referencia global" in out
+
+
+def test_pdf_chunks_detalla_un_fallo(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert (
+        main(["pdf", "chunks", str(fixture), "--tomo", "348", "--cita", "348:34"]) == 0
+    )
+    out = capsys.readouterr().out
+    assert "mayoria" in out
+    assert "voto" in out
+    assert "Ricardo Luis Lorenzetti" in out
+
+
+def test_pdf_chunks_solape_invalido_es_error():
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    with pytest.raises(SystemExit) as exc:
+        main(["pdf", "chunks", str(fixture), "--tomo", "348", "--solape", "400"])
+    assert exc.value.code != 0
 
 
 def test_pdf_sin_accion_es_error():
