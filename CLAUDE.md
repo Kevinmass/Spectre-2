@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-21)
+## Estado del código (al cerrar PR-22)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -41,15 +41,26 @@ SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
 tribunal / tipo de sección), `spectre/api/` (`app.crear_app`: FastAPI que
 sirve `spectre/web/` estático y expone `GET /api/estado` — tomos + total de
-chunks — y `GET /api/buscar` — PR-21: envuelve `buscar_hibrido`, cachea el
+chunks —, `GET /api/buscar` — PR-21: envuelve `buscar_hibrido`, cachea el
 modelo de embeddings por instancia de app y degrada sola a léxico puro si
 `sentence-transformers` no está, diciéndolo en `modo` — nunca fingiendo
-`hibrido`), `spectre/web/` (HTML/CSS/JS planos sin build: layout con dos
-tabs, Buscar y Biblioteca; Buscar ya busca de verdad —campo de consulta,
-resultados con cita `Fallos: N:N`, extracto con el término resaltado en
-`<mark>`, etiqueta de sección mayoría/voto/disidencia/dictamen—, Biblioteca
-todavía es de solo lectura, eso es PR-23). `spectre serve` levanta ese
-servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
+`hibrido` —, `GET /api/fallos/{cita}` — PR-22: el fallo completo por
+secciones + metadatos + citas salientes, recalculadas al vuelo con
+`extraer_citas` (PR-10) sobre el texto ya persistido porque el pipeline
+(PR-19) decidió a propósito no guardarlas en la tabla `citas` (es la materia
+prima de un grafo de precedentes fuera del MVP, §8.3) — y `GET
+/api/tomos/{numero}/pdf` — sirve el PDF del tomo desde disco, para el enlace
+"ver en el PDF" con `#page=N` calculado con `pagina_oficial +
+tomos.offset_pagina`), `spectre/web/` (HTML/CSS/JS planos sin build: layout
+con dos tabs, Buscar y Biblioteca, más una vista de fallo sin tab propio
+—se llega clickeando un resultado—; Buscar ya busca de verdad —campo de
+consulta, resultados con cita `Fallos: N:N`, extracto con el término
+resaltado en `<mark>`, etiqueta de sección mayoría/voto/disidencia/
+dictamen—, la vista de fallo muestra el texto completo por sección,
+metadatos, citas salientes y el enlace al PDF en la página exacta del
+fragmento que trajo el resultado (no solo la primera página del fallo).
+Biblioteca todavía es de solo lectura, eso es PR-23). `spectre serve` levanta
+ese servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -185,8 +196,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
     navegador (PR-20). La pestaña Buscar ya busca de verdad (PR-21):
     `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
-    resaltado y etiqueta de sección. Biblioteca todavía es de solo lectura
-    (PR-23 le agrega subir/indexar desde la UI).
+    resaltado y etiqueta de sección. Clickear un resultado abre la vista de
+    fallo (PR-22): texto completo por sección, metadatos, citas salientes y
+    el enlace al PDF original en la página exacta del fragmento. Biblioteca
+    todavía es de solo lectura (PR-23 le agrega subir/indexar desde la UI).
 
 ## Tests
 

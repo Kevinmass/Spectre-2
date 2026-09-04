@@ -122,9 +122,15 @@ function renderResultado(r, terminos) {
   const encabezado = document.createElement("div");
   encabezado.className = "resultado-encabezado";
 
-  const cita = document.createElement("span");
+  const cita = document.createElement("button");
+  cita.type = "button";
   cita.className = "cita";
   cita.textContent = r.cita ? `Fallos: ${r.cita}` : "(sin cita)";
+  if (r.cita) {
+    cita.addEventListener("click", () => mostrarFallo(r.cita, r.pagina_oficial));
+  } else {
+    cita.disabled = true;
+  }
   encabezado.appendChild(cita);
 
   if (r.seccion_tipo) {
@@ -183,6 +189,156 @@ async function buscar(consulta) {
   }
 }
 
+// --- vista de fallo (PR-22) ------------------------------------------- //
+
+function renderMetadatos(fallo) {
+  const dl = document.createElement("dl");
+  dl.className = "metadatos";
+  const filas = [
+    ["Fecha", fallo.fecha || "—"],
+    ["Tribunal de origen", fallo.tribunal_origen || "—"],
+    ["Tipo de recurso", fallo.tipo_recurso || "—"],
+    ["Jueces", fallo.jueces.length > 0 ? fallo.jueces.join(", ") : "—"],
+  ];
+  for (const [etiqueta, valor] of filas) {
+    const dt = document.createElement("dt");
+    dt.textContent = etiqueta;
+    const dd = document.createElement("dd");
+    dd.textContent = valor;
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  }
+  return dl;
+}
+
+function renderEnlacePdf(fallo, paginaSolicitada) {
+  const p = document.createElement("p");
+  if (!fallo.pdf_disponible) {
+    p.className = "vacio";
+    p.textContent = "El PDF de este tomo no está disponible en este servidor.";
+    return p;
+  }
+
+  const paginaOficial = paginaSolicitada ?? fallo.pagina_inicio;
+  const a = document.createElement("a");
+  a.target = "_blank";
+  a.rel = "noopener";
+  if (fallo.offset_pagina !== null && paginaOficial !== null) {
+    const paginaPdf = paginaOficial + fallo.offset_pagina;
+    a.href = `/api/tomos/${fallo.tomo_numero}/pdf#page=${paginaPdf}`;
+    a.textContent = `Ver en el PDF (Tomo ${fallo.tomo_numero}, página ${paginaOficial})`;
+  } else {
+    a.href = `/api/tomos/${fallo.tomo_numero}/pdf`;
+    a.textContent = `Ver el PDF del Tomo ${fallo.tomo_numero}`;
+  }
+  p.className = "enlace-pdf";
+  p.appendChild(a);
+  return p;
+}
+
+function renderSeccionFallo(sec) {
+  const div = document.createElement("div");
+  div.className = "seccion-fallo";
+
+  const encabezado = document.createElement("h3");
+  const badge = document.createElement("span");
+  badge.className = `badge badge-${sec.tipo}`;
+  badge.textContent = ETIQUETAS_SECCION[sec.tipo] || sec.tipo;
+  encabezado.appendChild(badge);
+  if (sec.autor) {
+    const autor = document.createElement("span");
+    autor.className = "seccion-autor";
+    autor.textContent = sec.autor;
+    encabezado.appendChild(autor);
+  }
+  div.appendChild(encabezado);
+
+  const texto = document.createElement("p");
+  texto.className = "seccion-texto";
+  texto.textContent = sec.texto;
+  div.appendChild(texto);
+
+  return div;
+}
+
+function renderCitasSalientes(citas) {
+  const contenedor = document.createElement("div");
+  contenedor.className = "citas-salientes";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Citas a otros fallos";
+  contenedor.appendChild(h3);
+
+  if (citas.length === 0) {
+    const p = document.createElement("p");
+    p.className = "vacio";
+    p.textContent = "No se encontraron citas a otros fallos en este texto.";
+    contenedor.appendChild(p);
+    return contenedor;
+  }
+
+  const ul = document.createElement("ul");
+  for (const c of citas) {
+    const li = document.createElement("li");
+    const cita = document.createElement("span");
+    cita.className = "cita";
+    cita.textContent = `Fallos: ${c.tomo_citado}:${c.pagina_citada}`;
+    li.appendChild(cita);
+    const contexto = document.createElement("p");
+    contexto.className = "cita-contexto";
+    contexto.textContent = c.contexto;
+    li.appendChild(contexto);
+    ul.appendChild(li);
+  }
+  contenedor.appendChild(ul);
+  return contenedor;
+}
+
+function renderFallo(fallo, paginaSolicitada) {
+  const contenedor = document.getElementById("fallo-contenido");
+  contenedor.textContent = "";
+
+  const h2 = document.createElement("h2");
+  h2.textContent = fallo.cita ? `Fallos: ${fallo.cita}` : "(sin cita)";
+  contenedor.appendChild(h2);
+
+  if (fallo.caratula) {
+    const caratula = document.createElement("p");
+    caratula.className = "caratula";
+    caratula.textContent = fallo.caratula;
+    contenedor.appendChild(caratula);
+  }
+
+  contenedor.appendChild(renderMetadatos(fallo));
+  contenedor.appendChild(renderEnlacePdf(fallo, paginaSolicitada));
+
+  const secciones = document.createElement("div");
+  secciones.className = "secciones-fallo";
+  for (const sec of fallo.secciones) {
+    secciones.appendChild(renderSeccionFallo(sec));
+  }
+  contenedor.appendChild(secciones);
+
+  contenedor.appendChild(renderCitasSalientes(fallo.citas_salientes));
+}
+
+async function mostrarFallo(cita, paginaOficial) {
+  activarTab("fallo");
+  const contenedor = document.getElementById("fallo-contenido");
+  contenedor.textContent = "Cargando…";
+
+  try {
+    const resp = await fetch(`/api/fallos/${encodeURIComponent(cita)}`);
+    if (!resp.ok) {
+      throw new Error(`${resp.status} ${resp.statusText}`);
+    }
+    const fallo = await resp.json();
+    renderFallo(fallo, paginaOficial);
+  } catch (err) {
+    contenedor.textContent = `No se pudo cargar el fallo (${err.message}).`;
+  }
+}
+
 for (const boton of document.querySelectorAll(".tab")) {
   boton.addEventListener("click", () => activarTab(boton.dataset.tab));
 }
@@ -193,6 +349,10 @@ document.getElementById("form-buscar").addEventListener("submit", (ev) => {
   if (consulta) {
     buscar(consulta);
   }
+});
+
+document.getElementById("volver-resultados").addEventListener("click", () => {
+  activarTab("buscar");
 });
 
 cargarEstado();

@@ -1,7 +1,8 @@
-"""Servidor FastAPI (PR-20/21): estático + estado real + búsqueda híbrida.
+"""Servidor FastAPI (PR-20/21/22): estático + estado real + búsqueda híbrida
++ vista de fallo.
 
-Sirve `spectre/web/` (HTML/CSS/JS planos, sin build) y expone dos rutas de
-solo lectura:
+Sirve `spectre/web/` (HTML/CSS/JS planos, sin build) y expone rutas de solo
+lectura:
 
 - `/api/estado`: sin ella, la interfaz no tiene forma de distinguir "no hay
   nada indexado todavía" de "hay resultados pero está mostrando 0" — mostrar
@@ -13,12 +14,22 @@ solo lectura:
   segundos"); si `sentence-transformers` no está instalado, degrada sola a
   léxico puro (D-6 no ata la búsqueda a que el modelo real esté disponible)
   y lo dice en la respuesta (`modo`), no lo oculta.
+- `/api/fallos/{cita}` (PR-22): el fallo completo por secciones + metadatos +
+  citas salientes. Las citas se recalculan sobre el texto ya persistido
+  (`extraer_citas`, PR-10) porque el pipeline (PR-19) decidió a propósito no
+  guardarlas — son la materia prima de un grafo de precedentes que el plan
+  deja fuera del MVP (§8.3) — así que la única forma honesta de mostrarlas es
+  calcularlas al vuelo, no inventar una tabla que nadie llena.
+- `/api/tomos/{numero}/pdf` (PR-22): sirve el PDF del tomo tal cual está en
+  disco, para el enlace "ver en el PDF" de la vista de fallo (D-9: el PDF
+  vive en disco, subido a mano o descargado; acá solo se lo expone).
 
 La gestión de la biblioteca (subir/indexar tomos desde la UI) es PR-23.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections.abc import Callable
@@ -27,9 +38,11 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from spectre.config import get_settings
+from spectre.corpus.fallo import extraer_citas
 from spectre.db import Repo, connect
 from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
@@ -186,6 +199,78 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
             return {"consulta": consulta, "modo": modo, "resultados": resultados}
         finally:
             conn.close()
+
+    @app.get("/api/fallos/{cita}")
+    def fallo_detalle(cita: str) -> dict:
+        s = get_settings()
+        if not s.db_path.exists():
+            raise HTTPException(404, f"no hay ningún fallo con cita {cita}")
+
+        conn = connect(s.db_path)
+        try:
+            repo = Repo(conn)
+            fallo = repo.get_fallo_por_cita(cita)
+            if fallo is None:
+                raise HTTPException(404, f"no hay ningún fallo con cita {cita}")
+
+            tomo = repo.get_tomo(fallo.tomo_id)
+            secciones = repo.list_secciones_de_fallo(fallo.id)
+            texto_completo = "\n".join(sec.texto for sec in secciones if sec.texto)
+            citas = extraer_citas(texto_completo)
+            pdf_path = Path(tomo.pdf_path) if tomo and tomo.pdf_path else None
+
+            return {
+                "cita": fallo.cita,
+                "caratula": fallo.caratula,
+                "fecha": fallo.fecha,
+                "tribunal_origen": fallo.tribunal_origen,
+                "tipo_recurso": fallo.tipo_recurso,
+                "jueces": json.loads(fallo.jueces) if fallo.jueces else [],
+                "tomo_numero": tomo.numero if tomo else None,
+                "pagina_inicio": fallo.pagina_inicio,
+                "pagina_fin": fallo.pagina_fin,
+                "offset_pagina": tomo.offset_pagina if tomo else None,
+                "pdf_disponible": bool(pdf_path and pdf_path.is_file()),
+                "secciones": [
+                    {
+                        "tipo": sec.tipo,
+                        "autor": sec.autor,
+                        "orden": sec.orden,
+                        "texto": sec.texto,
+                    }
+                    for sec in secciones
+                ],
+                "citas_salientes": [
+                    {
+                        "tomo_citado": c.tomo_citado,
+                        "pagina_citada": c.pagina_citada,
+                        "contexto": c.contexto,
+                    }
+                    for c in citas
+                ],
+            }
+        finally:
+            conn.close()
+
+    @app.get("/api/tomos/{numero}/pdf")
+    def pdf_tomo(numero: int) -> FileResponse:
+        s = get_settings()
+        if not s.db_path.exists():
+            raise HTTPException(404, f"no existe el tomo {numero}")
+
+        conn = connect(s.db_path)
+        try:
+            tomo = Repo(conn).get_tomo_por_numero(numero)
+        finally:
+            conn.close()
+
+        if tomo is None:
+            raise HTTPException(404, f"no existe el tomo {numero}")
+        if not tomo.pdf_path or not Path(tomo.pdf_path).is_file():
+            raise HTTPException(
+                404, f"el PDF del tomo {numero} no está disponible en este servidor"
+            )
+        return FileResponse(tomo.pdf_path, media_type="application/pdf")
 
     # Al final: StaticFiles(html=True) sirve index.html en "/" y es un
     # catch-all, así que las rutas de la API tienen que quedar registradas

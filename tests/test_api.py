@@ -1,11 +1,16 @@
-"""PR-20/21 — servidor FastAPI: estático + `/api/estado` + `/api/buscar`.
+"""PR-20/21/22 — servidor FastAPI: estático + `/api/estado` + `/api/buscar` +
+`/api/fallos/{cita}` + `/api/tomos/{numero}/pdf`.
 
 D-05 aplicado a la UI: `/api/estado` nunca muestra datos que no estén de
-verdad en la base, y `/api/buscar` nunca finge una búsqueda semántica que no
+verdad en la base, `/api/buscar` nunca finge una búsqueda semántica que no
 corrió — si `sentence-transformers` no está disponible, `modo` en la
-respuesta dice `solo_lexico` en vez de fingir `hibrido`."""
+respuesta dice `solo_lexico` en vez de fingir `hibrido`—, y `/api/fallos/...`
+nunca dice que un PDF está disponible si el archivo no está realmente en
+disco."""
 
 from __future__ import annotations
+
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -55,6 +60,28 @@ def _fallo_con_seccion_y_chunks(
         fallo_id, [(seccion_id, i, t, None) for i, t in enumerate(textos)]
     )
     return fallo_id
+
+
+def _fallo_con_secciones(
+    repo, *, cita, secciones, numero=None, pdf_path=None, **campos_fallo
+):
+    """`secciones` es una lista de `(tipo, autor, texto)`. Devuelve `(tomo_id,
+    fallo_id)` — a diferencia de `_fallo_con_seccion_y_chunks`, escribe
+    `secciones.texto` directamente (la vista de fallo lee eso, no `chunks`)."""
+    if numero is None:
+        numero = repo.conn.execute("SELECT count(*) FROM tomos").fetchone()[0] + 1
+    tomo_id = repo.insert_tomo(numero, pdf_path=pdf_path)
+    fallo_id = repo.insert_fallo(
+        tomo_id, "Pérez, Juan c/ Estado Nacional", cita=cita, **campos_fallo
+    )
+    for orden, (tipo, autor, texto) in enumerate(secciones):
+        repo.conn.execute(
+            "INSERT INTO secciones (fallo_id, tipo, autor, orden, texto)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (fallo_id, tipo, autor, orden, texto),
+        )
+    repo.conn.commit()
+    return tomo_id, fallo_id
 
 
 # --- /api/estado (PR-20) --------------------------------------------------- #
@@ -307,3 +334,164 @@ def test_buscar_el_modelo_se_carga_una_sola_vez_por_app(monkeypatch, datos_tmp):
         assert r.status_code == 200
 
     assert len(llamadas) == 1
+
+
+# --- /api/fallos/{cita} (PR-22) -------------------------------------------- #
+
+
+def test_fallo_detalle_sin_base_da_404(datos_tmp):
+    r = _cliente().get("/api/fallos/348:1")
+    assert r.status_code == 404
+
+
+def test_fallo_detalle_cita_inexistente_da_404(datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348)
+    conn.close()
+
+    r = _cliente().get("/api/fallos/348:999")
+    assert r.status_code == 404
+    assert "348:999" in r.json()["detail"]
+
+
+def test_fallo_detalle_devuelve_metadatos_secciones_y_citas(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id, _fallo_id = _fallo_con_secciones(
+        repo,
+        cita="348:113",
+        numero=348,
+        secciones=[
+            (
+                "mayoria",
+                None,
+                "El tribunal remite a Fallos: 337:315, "
+                "«Acevedo», por análogas razones.",
+            ),
+            ("disidencia", "Carlos Fernando Rosenkrantz", "En disidencia, voto por..."),
+        ],
+        fecha="2025-03-19",
+        tribunal_origen="Cámara Federal de Casación Penal",
+        tipo_recurso="recurso extraordinario",
+        jueces=json.dumps(["Horacio Rosatti", "Ricardo Luis Lorenzetti"]),
+        pagina_inicio=113,
+        pagina_fin=165,
+    )
+    repo.actualizar_tomo(tomo_id, offset_pagina=6)
+    conn.close()
+
+    r = _cliente().get("/api/fallos/348:113")
+    assert r.status_code == 200
+    cuerpo = r.json()
+
+    assert cuerpo["cita"] == "348:113"
+    assert cuerpo["caratula"] == "Pérez, Juan c/ Estado Nacional"
+    assert cuerpo["fecha"] == "2025-03-19"
+    assert cuerpo["tribunal_origen"] == "Cámara Federal de Casación Penal"
+    assert cuerpo["tipo_recurso"] == "recurso extraordinario"
+    assert cuerpo["jueces"] == ["Horacio Rosatti", "Ricardo Luis Lorenzetti"]
+    assert cuerpo["tomo_numero"] == 348
+    assert cuerpo["pagina_inicio"] == 113
+    assert cuerpo["pagina_fin"] == 165
+    assert cuerpo["offset_pagina"] == 6
+    assert cuerpo["pdf_disponible"] is False
+
+    assert len(cuerpo["secciones"]) == 2
+    assert cuerpo["secciones"][0]["tipo"] == "mayoria"
+    assert cuerpo["secciones"][0]["autor"] is None
+    assert cuerpo["secciones"][1]["tipo"] == "disidencia"
+    assert cuerpo["secciones"][1]["autor"] == "Carlos Fernando Rosenkrantz"
+
+    assert len(cuerpo["citas_salientes"]) == 1
+    cita_saliente = cuerpo["citas_salientes"][0]
+    assert cita_saliente["tomo_citado"] == 337
+    assert cita_saliente["pagina_citada"] == 315
+    assert "Acevedo" in cita_saliente["contexto"]
+
+
+def test_fallo_detalle_jueces_vacios_da_lista_vacia(datos_tmp):
+    conn, repo = _base_migrada()
+    _fallo_con_secciones(
+        repo, cita="348:1", secciones=[("mayoria", None, "texto sin citas")]
+    )
+    conn.close()
+
+    r = _cliente().get("/api/fallos/348:1")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["jueces"] == []
+    assert cuerpo["citas_salientes"] == []
+
+
+def test_fallo_detalle_pdf_disponible_si_el_archivo_existe(datos_tmp, tmp_path):
+    pdf = tmp_path / "348.pdf"
+    pdf.write_bytes(b"%PDF-1.4 contenido de prueba")
+
+    conn, repo = _base_migrada()
+    _fallo_con_secciones(
+        repo,
+        cita="348:1",
+        secciones=[("mayoria", None, "texto")],
+        pdf_path=str(pdf),
+    )
+    conn.close()
+
+    r = _cliente().get("/api/fallos/348:1")
+    assert r.status_code == 200
+    assert r.json()["pdf_disponible"] is True
+
+
+def test_fallo_detalle_pdf_no_disponible_si_el_archivo_no_esta_en_disco(datos_tmp):
+    conn, repo = _base_migrada()
+    _fallo_con_secciones(
+        repo,
+        cita="348:1",
+        secciones=[("mayoria", None, "texto")],
+        pdf_path="C:/no/existe/348.pdf",
+    )
+    conn.close()
+
+    r = _cliente().get("/api/fallos/348:1")
+    assert r.status_code == 200
+    assert r.json()["pdf_disponible"] is False
+
+
+# --- /api/tomos/{numero}/pdf (PR-22) --------------------------------------- #
+
+
+def test_pdf_tomo_sin_base_da_404(datos_tmp):
+    assert _cliente().get("/api/tomos/348/pdf").status_code == 404
+
+
+def test_pdf_tomo_inexistente_da_404(datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(1)
+    conn.close()
+
+    r = _cliente().get("/api/tomos/348/pdf")
+    assert r.status_code == 404
+    assert "348" in r.json()["detail"]
+
+
+def test_pdf_tomo_sin_archivo_en_disco_da_404(datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348, pdf_path="C:/no/existe/348.pdf")
+    conn.close()
+
+    r = _cliente().get("/api/tomos/348/pdf")
+    assert r.status_code == 404
+    assert "no está disponible" in r.json()["detail"]
+
+
+def test_pdf_tomo_sirve_el_archivo_real(datos_tmp, tmp_path):
+    pdf = tmp_path / "348.pdf"
+    contenido = b"%PDF-1.4 contenido de prueba para servir"
+    pdf.write_bytes(contenido)
+
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348, pdf_path=str(pdf))
+    conn.close()
+
+    r = _cliente().get("/api/tomos/348/pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content == contenido

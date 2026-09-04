@@ -513,11 +513,31 @@ sin reparsear.
   bitácora PR-21 para el detalle y por qué no se precarga el modelo en el
   arranque.
 
-- [ ] **PR-22 `[N]` Vista del fallo**
+- [x] **PR-22 `[N]` Vista del fallo**
   Texto completo por secciones, metadatos, citas salientes, enlace a la página
   del PDF original.
   *Acepta:* desde un resultado se llega al fallo completo y de ahí al PDF en la
   página correcta.
+  Hecho: `GET /api/fallos/{cita}` (`spectre/api/app.py`) — texto completo por
+  sección (`secciones.texto`, ya persistido), metadatos (fecha, tribunal de
+  origen, tipo de recurso, jueces), y citas salientes **recalculadas al
+  vuelo** con `extraer_citas` (PR-10) sobre ese texto: el pipeline (PR-19)
+  decidió a propósito no persistirlas en la tabla `citas` (es la materia
+  prima de un grafo de precedentes, fuera del MVP — §8.3), así que
+  mostrarlas sin inventar una tabla que nadie llena es recalcularlas, no
+  fingir que están guardadas. `GET /api/tomos/{numero}/pdf` sirve el PDF
+  desde disco (D-9); la vista de fallo calcula la página del visor
+  (`#page=N`) con `pagina_oficial + tomos.offset_pagina` — usando la página
+  del **chunk que trajo el resultado de búsqueda**, no la primera página del
+  fallo, así que "la página correcta" es literal. `spectre/web/`: clickear
+  la cita de un resultado abre la vista de fallo (sin tab ni URL propia
+  todavía, ver dudas de la bitácora); un botón vuelve a los resultados.
+  Verificado con datos reales (Tomo 348: el caso "Loyola", 348:113, con
+  dictamen + mayoría + 3 votos concurrentes — el mismo que PR-09 usó de
+  referencia) y con la matemática de página confirmada contra el PDF real
+  con `pdfplumber` (la página oficial 739 de un resultado de búsqueda sobre
+  el Tomo 349 mapea exacto a `pdf_page` 745, que dice "739" en el
+  encabezado). Ver bitácora PR-22.
 
 - [ ] **PR-23 `[N]` Biblioteca**
   Tomos disponibles, cuáles están indexados, cuáles requieren OCR, progreso de
@@ -595,5 +615,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-21 cerrados (04/09/2026).
-Próximo: **PR-22**.
+a PR-22 cerrados (04/09/2026).
+Próximo: **PR-23**.
