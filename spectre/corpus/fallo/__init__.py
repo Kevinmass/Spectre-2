@@ -29,6 +29,7 @@ from spectre.corpus.fallo.structure import (
     MetadatosFallo,
     extraer_metadatos,
     texto_del_fallo,
+    texto_del_fallo_paginado,
 )
 
 __all__ = [
@@ -50,4 +51,5 @@ __all__ = [
     "segmentar_desde_indice",
     "segmentar_por_delimitadores",
     "texto_del_fallo",
+    "texto_del_fallo_paginado",
 ]

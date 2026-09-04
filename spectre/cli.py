@@ -1,12 +1,13 @@
 """CLI de Spectre.
 
-Estado PR-10: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+Estado PR-11: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
 y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
 con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 `sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
-`citations` extrae las citas `Fallos: N:N` a precedentes). El resto existe en
-`--help` pero **revienta si lo invocás** (D-05).
+`citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
+cada sección en ventanas de ~400 palabras). El resto existe en `--help` pero
+**revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -457,6 +458,128 @@ def _cmd_pdf_citations(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_chunks(args: argparse.Namespace) -> int:
+    from statistics import mean, median
+
+    from spectre.chunking import (
+        fragmentar_fallo,
+        normalizar_espacios,
+        ubicar_pagina,
+    )
+    from spectre.corpus.fallo import (
+        parsear_indice,
+        partir_secciones,
+        segmentar,
+        texto_del_fallo_paginado,
+    )
+    from spectre.corpus.pdf import contar_palabras, extraer_texto, limpiar
+
+    tomo = args.tomo or _tomo_de_nombre(args.pdf)
+    if tomo is None:
+        raise SystemExit("no pude inferir el número de tomo del nombre; pasá --tomo")
+    if not 0 <= args.solape < args.objetivo:
+        raise SystemExit("--solape tiene que ser >=0 y menor que --objetivo")
+
+    paginas = extraer_texto(args.pdf)
+    por_oficial = {p.pagina_oficial: p for p in paginas if p.pagina_oficial is not None}
+    fin_cuerpo = max(por_oficial)
+    try:
+        entradas = parsear_indice(args.pdf)
+    except ValueError:
+        entradas = None
+    r = segmentar(entradas, paginas, tomo_numero=tomo)
+
+    por_fallo = []  # (fallo, secciones, chunks, ubicados)
+    for i, f in enumerate(r.fallos):
+        sig = r.fallos[i + 1].pagina_inicio if i + 1 < len(r.fallos) else None
+        paginado = texto_del_fallo_paginado(
+            por_oficial,
+            pagina_inicio=f.pagina_inicio,
+            pagina_inicio_siguiente=sig,
+            pagina_fin_cuerpo=fin_cuerpo,
+        )
+        texto = "\n".join(t for _, t in paginado)
+        secciones = partir_secciones(texto)
+        chunks = fragmentar_fallo(
+            secciones,
+            paginado,
+            cita=f.cita,
+            pagina_inicio=f.pagina_inicio,
+            objetivo=args.objetivo,
+            solape=args.solape,
+        )
+        paginas_norm = [(o, normalizar_espacios(t)) for o, t in paginado]
+        ubicados = sum(
+            1
+            for c in chunks
+            if ubicar_pagina(normalizar_espacios(c.texto), paginas_norm) is not None
+        )
+        por_fallo.append((f, secciones, chunks, ubicados))
+
+    if args.cita:
+        elegido = next((x for x in por_fallo if x[0].cita == args.cita), None)
+        if elegido is None:
+            raise SystemExit(f"no hay un fallo con cita {args.cita}")
+        f, secciones, chunks, _ = elegido
+        print(f"Fallos: {f.cita}  {f.caratula}")
+        print(f"  {len(secciones)} secciones, {len(chunks)} chunks\n")
+        for c in chunks:
+            ini = " ".join(c.texto.split()[:12])
+            autor = c.seccion_autor or "-"
+            print(
+                f"  [{c.seccion_orden}.{c.orden}] {c.seccion_tipo:10} {autor:26.26} "
+                f"p.{c.pagina_oficial}  {c.n_palabras:4}p  {ini}..."
+            )
+        return 0
+
+    todos = [c for _, _, cs, _ in por_fallo for c in cs]
+    if not todos:
+        raise SystemExit(
+            "no se generó ningún chunk: el tomo no tiene secciones con texto"
+        )
+    n_sec = sum(len(s) for _, s, _, _ in por_fallo)
+    # D-4: cada chunk tiene que ser una ventana contigua de palabras de UNA
+    # sección (la suya). Si eso vale, ningún chunk mezcla mayoría con disidencia.
+    fuera_de_seccion = 0
+    for _f, secciones, chunks, _u in por_fallo:
+        por_orden = {s.orden: s.texto.split() for s in secciones}
+        for c in chunks:
+            pal = por_orden.get(c.seccion_orden, [])
+            w = c.texto.split()
+            if not any(pal[k : k + len(w)] == w for k in range(len(pal) - len(w) + 1)):
+                fuera_de_seccion += 1
+    en_rango = sum(
+        1
+        for f, _s, cs, _u in por_fallo
+        for c in cs
+        if f.pagina_inicio <= (c.pagina_oficial or -1) <= f.pagina_fin
+    )
+    ubicados = sum(u for _f, _s, _cs, u in por_fallo)
+
+    cuerpo = [p for p in paginas if p.pagina_oficial is not None]
+    cuerpo_palabras = sum(contar_palabras(limpiar(p.texto)) for p in cuerpo)
+    paso = args.objetivo - args.solape
+    filas = [
+        ("pdf", args.pdf),
+        ("fallos", len(por_fallo)),
+        ("secciones", n_sec),
+        ("chunks", len(todos)),
+        (
+            "referencia global",
+            f"{cuerpo_palabras} palabras / paso {paso} ~ {cuerpo_palabras // paso}",
+        ),
+        ("chunks por fallo", f"{mean(len(cs) for _f, _s, cs, _u in por_fallo):.1f}"),
+        ("palabras por chunk", f"mediana {median(c.n_palabras for c in todos):g}"),
+        ("chunks fuera de su sección", fuera_de_seccion),
+        ("página dentro del rango", f"{en_rango}/{len(todos)}"),
+        ("página ubicada por texto", f"{ubicados}/{len(todos)}"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -571,6 +694,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--cita", help="lista las citas de un fallo con su contexto (ej. 348:113)"
     )
     p_pdf_citations.set_defaults(func=_cmd_pdf_citations)
+
+    p_pdf_chunks = pdf_sub.add_parser(
+        "chunks",
+        help="Fragmenta cada sección en ventanas de ~400 palabras con 80 de solape",
+    )
+    p_pdf_chunks.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_chunks.add_argument(
+        "--tomo", type=int, help="número de tomo (si no, se infiere del nombre)"
+    )
+    p_pdf_chunks.add_argument(
+        "--cita", help="lista los chunks de un fallo (ej. 348:113)"
+    )
+    p_pdf_chunks.add_argument(
+        "--objetivo", type=int, default=400, metavar="N", help="palabras por chunk"
+    )
+    p_pdf_chunks.add_argument(
+        "--solape", type=int, default=80, metavar="N", help="palabras de solape"
+    )
+    p_pdf_chunks.set_defaults(func=_cmd_pdf_chunks)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

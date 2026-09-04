@@ -265,17 +265,19 @@ def extraer_metadatos(texto: str, *, caratula: str) -> MetadatosFallo:
     )
 
 
-def texto_del_fallo(
+def texto_del_fallo_paginado(
     paginas_por_oficial: dict[int, PaginaTexto],
     *,
     pagina_inicio: int,
     pagina_inicio_siguiente: int | None,
     pagina_fin_cuerpo: int,
-) -> str:
-    """Texto limpio del fallo: sus páginas más la de arranque del siguiente
-    (comparten el pie), cortada en la próxima carátula."""
+) -> list[tuple[int, str]]:
+    """El texto limpio del fallo troceado por página oficial: `[(oficial, texto),
+    ...]` en orden. `"\\n".join(t for _, t in ...)` reproduce `texto_del_fallo`
+    exactamente; el trozo por página es lo que necesita el chunker (PR-11) para
+    heredar `pagina_oficial`."""
     fin = pagina_inicio_siguiente if pagina_inicio_siguiente else pagina_fin_cuerpo
-    trozos: list[str] = []
+    paginado: list[tuple[int, str]] = []
     for oficial in range(pagina_inicio, fin + 1):
         pagina = paginas_por_oficial.get(oficial)
         if pagina is None:
@@ -297,5 +299,25 @@ def texto_del_fallo(
             if nota is not None:
                 conservado.append(nota)
             crudo = "\n".join(conservado)
-        trozos.append(limpiar(crudo))
-    return "\n".join(trozos)
+        paginado.append((oficial, limpiar(crudo)))
+    return paginado
+
+
+def texto_del_fallo(
+    paginas_por_oficial: dict[int, PaginaTexto],
+    *,
+    pagina_inicio: int,
+    pagina_inicio_siguiente: int | None,
+    pagina_fin_cuerpo: int,
+) -> str:
+    """Texto limpio del fallo: sus páginas más la de arranque del siguiente
+    (comparten el pie), cortada en la próxima carátula."""
+    return "\n".join(
+        texto
+        for _, texto in texto_del_fallo_paginado(
+            paginas_por_oficial,
+            pagina_inicio=pagina_inicio,
+            pagina_inicio_siguiente=pagina_inicio_siguiente,
+            pagina_fin_cuerpo=pagina_fin_cuerpo,
+        )
+    )
