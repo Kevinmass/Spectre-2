@@ -64,7 +64,9 @@ delimitadores del segmentador (`spectre.corpus.fallo.segmenter`, PR-07):
 - `pdf_page` 252 (oficial 246): inicio del fallo siguiente ("Favero ...").
 
 El fallback tiene que ver dos inicios (189 y 246) y no meter ningún corte en el
-medio. Regenerar:
+medio. Desde PR-10 sirve también a `spectre.corpus.fallo.citations`: las páginas
+interiores de "Acevedo" traen varias citas `Fallos: N:N` a precedentes.
+Regenerar:
 
 ```python
 from pypdf import PdfReader, PdfWriter
