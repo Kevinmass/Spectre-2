@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spectre — Fallos de la CSJN</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="cabecera">
+    <h1>Spectre</h1>
+    <nav class="tabs" aria-label="Secciones">
+      <button type="button" class="tab" data-tab="buscar" aria-current="true">Buscar</button>
+      <button type="button" class="tab" data-tab="biblioteca">Biblioteca</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-buscar" class="panel">
+      <p id="buscar-estado" class="vacio">Cargando…</p>
+    </section>
+
+    <section id="tab-biblioteca" class="panel" hidden>
+      <p id="biblioteca-vacio" class="vacio" hidden>Todavía no cargaste ningún tomo.</p>
+      <table id="biblioteca-tabla" hidden>
+        <thead>
+          <tr><th>Tomo</th><th>Estado</th><th>Calidad</th></tr>
+        </thead>
+        <tbody id="biblioteca-filas"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

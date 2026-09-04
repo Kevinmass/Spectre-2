@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-19)
+## Estado del código (al cerrar PR-20)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -39,9 +39,13 @@ detrás del extra opcional `[embed]`), `spectre/index/`
 `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
 SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
-tribunal / tipo de sección). El resto del árbol de la §4 del plan (`api/`,
-`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
-próximo PR.
+tribunal / tipo de sección), `spectre/api/` (`app.crear_app`: FastAPI que
+sirve `spectre/web/` estático y expone `GET /api/estado` — tomos + total de
+chunks, la única fuente que la UI consulta para saber si hay algo indexado),
+`spectre/web/` (HTML/CSS/JS planos sin build: layout con dos tabs, Buscar y
+Biblioteca, con estados vacíos honestos — todavía no buscan ni gestionan
+tomos, eso es PR-21/PR-23). `spectre serve` levanta ese servidor y abre el
+navegador. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -172,8 +176,12 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     Un tomo que mide `requiere_ocr` (PR-18) se frena después de `extraer`
     (D-10): la "cola visible" son los tomos con `estado='extraido'` y
     `calidad='requiere_ocr'`.
-  - `serve` — declarado pero revienta (lo implementa PR-20). Ningún stub que
-    reporte éxito.
+  - `serve [--host H] [--port N] [--no-browser]` — migra la base si hace
+    falta, levanta el servidor FastAPI (`spectre/api/`) que sirve
+    `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
+    navegador (PR-20). La UI todavía no busca ni gestiona tomos (eso es
+    PR-21/PR-23): muestra layout, navegación entre Buscar/Biblioteca y
+    estados vacíos honestos leídos de `GET /api/estado`.
 
 ## Tests
 

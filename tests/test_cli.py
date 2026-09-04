@@ -414,13 +414,53 @@ def test_ingest_sin_pdf_ni_csjn_id_revienta_en_descargar(capsys, datos_tmp):
     assert "estado   registrado" in out  # no avanzó ni una etapa
 
 
-@pytest.mark.parametrize("cmd", ["serve"])
-def test_subcomandos_vacios_fallan_ruidosamente(cmd):
-    # Ningún stub que reporte éxito (D-05).
-    with pytest.raises(SystemExit) as exc:
-        main([cmd])
-    assert exc.value.code != 0
-    assert "no implementado" in str(exc.value)
+# --- serve (PR-20) ------------------------------------------------------- #
+
+
+def test_serve_migra_y_levanta_uvicorn_en_host_y_puerto(monkeypatch, datos_tmp):
+    llamadas: dict[str, object] = {}
+
+    def uvicorn_run_falso(app, host, port, log_level=None):
+        llamadas["host"] = host
+        llamadas["port"] = port
+
+    monkeypatch.setattr("uvicorn.run", uvicorn_run_falso)
+    monkeypatch.setattr("webbrowser.open", lambda url: None)
+
+    assert main(["serve", "--port", "8123"]) == 0
+
+    assert llamadas == {"host": "127.0.0.1", "port": 8123}
+    assert get_settings().db_path.is_file()  # migró antes de levantar
+
+
+def test_serve_arma_el_hook_que_abre_el_navegador(monkeypatch, datos_tmp):
+    capturado: dict[str, object] = {}
+
+    def crear_app_falsa(*, on_startup=None):
+        capturado["on_startup"] = on_startup
+        return "app-falsa"
+
+    monkeypatch.setattr("spectre.api.crear_app", crear_app_falsa)
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    abiertas = []
+    monkeypatch.setattr("webbrowser.open", abiertas.append)
+
+    assert main(["serve", "--port", "8123"]) == 0
+
+    capturado["on_startup"]()
+    assert abiertas == ["http://127.0.0.1:8123/"]
+
+
+def test_serve_con_no_browser_no_registra_hook(monkeypatch, datos_tmp):
+    capturado: dict[str, object] = {}
+    monkeypatch.setattr(
+        "spectre.api.crear_app",
+        lambda *, on_startup=None: capturado.setdefault("on_startup", on_startup),
+    )
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+
+    assert main(["serve", "--no-browser"]) == 0
+    assert capturado["on_startup"] is None
 
 
 def test_sin_subcomando_es_error():
