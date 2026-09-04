@@ -36,10 +36,39 @@
       <p id="biblioteca-vacio" class="vacio" hidden>Todavía no cargaste ningún tomo.</p>
       <table id="biblioteca-tabla" hidden>
         <thead>
-          <tr><th>Tomo</th><th>Estado</th><th>Calidad</th></tr>
+          <tr><th>Tomo</th><th>Estado</th><th>Calidad</th><th>Progreso</th></tr>
         </thead>
         <tbody id="biblioteca-filas"></tbody>
       </table>
+
+      <div class="acciones-biblioteca">
+        <form id="form-indexar-csjn" class="form-tomo">
+          <h3>Indexar desde la CSJN</h3>
+          <label>
+            Número de tomo
+            <input type="number" name="numero" min="1" required />
+          </label>
+          <label>
+            Id de la CSJN (opcional)
+            <input type="text" name="csjn_tomo_id" placeholder="lo da `spectre csjn catalog`" />
+          </label>
+          <button type="submit">Indexar</button>
+        </form>
+
+        <form id="form-subir-pdf" class="form-tomo">
+          <h3>Subir un PDF propio</h3>
+          <label>
+            Número de tomo
+            <input type="number" name="numero" min="1" required />
+          </label>
+          <label>
+            Archivo PDF
+            <input type="file" name="archivo" accept="application/pdf" required />
+          </label>
+          <button type="submit">Subir e indexar</button>
+        </form>
+      </div>
+      <p id="biblioteca-aviso" class="vacio" hidden></p>
     </section>
 
     <section id="tab-fallo" class="panel" hidden>

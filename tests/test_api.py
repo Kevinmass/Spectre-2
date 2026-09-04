@@ -1,16 +1,20 @@
-"""PR-20/21/22 — servidor FastAPI: estático + `/api/estado` + `/api/buscar` +
-`/api/fallos/{cita}` + `/api/tomos/{numero}/pdf`.
+"""PR-20/21/22/23 — servidor FastAPI: estático + `/api/estado` +
+`/api/buscar` + `/api/fallos/{cita}` + `/api/tomos/{numero}/pdf` +
+`POST /api/tomos/{numero}/indexar` + `POST /api/tomos/{numero}/subir`.
 
 D-05 aplicado a la UI: `/api/estado` nunca muestra datos que no estén de
-verdad en la base, `/api/buscar` nunca finge una búsqueda semántica que no
-corrió — si `sentence-transformers` no está disponible, `modo` en la
-respuesta dice `solo_lexico` en vez de fingir `hibrido`—, y `/api/fallos/...`
-nunca dice que un PDF está disponible si el archivo no está realmente en
-disco."""
+verdad en la base (desde PR-23, tampoco un progreso que en realidad está
+trabado en una etapa fallida), `/api/buscar` nunca finge una búsqueda
+semántica que no corrió — si `sentence-transformers` no está disponible,
+`modo` en la respuesta dice `solo_lexico` en vez de fingir `hibrido`—,
+`/api/fallos/...` nunca dice que un PDF está disponible si el archivo no
+está realmente en disco, y `POST /api/tomos/.../indexar` no reintenta sola
+una etapa que ya falló."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -115,7 +119,14 @@ def test_estado_refleja_tomos_y_chunks_reales(datos_tmp):
     cuerpo = r.json()
     assert cuerpo["chunks"] == 3
     assert cuerpo["tomos"] == [
-        {"numero": 348, "estado": "indexado", "calidad": "digital"}
+        {
+            "numero": 348,
+            "estado": "indexado",
+            "calidad": "digital",
+            "etapas_hechas": 8,
+            "etapas_total": 8,
+            "error": None,
+        }
     ]
 
 
@@ -495,3 +506,167 @@ def test_pdf_tomo_sirve_el_archivo_real(datos_tmp, tmp_path):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content == contenido
+
+
+# --- /api/estado: progreso y error por tomo (PR-23) ------------------------ #
+
+
+def test_estado_muestra_progreso_a_medio_camino(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id, estado="estructurado")
+    conn.close()
+
+    r = _cliente().get("/api/estado")
+    tomo = r.json()["tomos"][0]
+    assert tomo["estado"] == "estructurado"
+    assert tomo["etapas_hechas"] == 5  # descargar..estructurar
+    assert tomo["etapas_total"] == 8
+    assert tomo["error"] is None
+
+
+def test_estado_muestra_el_error_de_una_etapa_fallida(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id, estado="estructurado")
+    from spectre.db import ahora_iso
+
+    conn.execute(
+        "INSERT INTO jobs (tipo, payload, estado, error, creado_at)"
+        " VALUES ('pipeline.fragmentar', ?, 'fallido', 'boom: algo se rompió', ?)",
+        (json.dumps({"tomo_id": tomo_id}), ahora_iso()),
+    )
+    conn.commit()
+    conn.close()
+
+    r = _cliente().get("/api/estado")
+    tomo = r.json()["tomos"][0]
+    assert tomo["error"] == {"etapa": "fragmentar", "mensaje": "boom: algo se rompió"}
+
+
+def test_estado_requiere_ocr_no_cuenta_como_error(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id, estado="extraido", calidad="requiere_ocr")
+    conn.close()
+
+    r = _cliente().get("/api/estado")
+    tomo = r.json()["tomos"][0]
+    assert tomo["error"] is None  # frenado por D-10, no por una etapa rota
+
+
+# --- POST /api/tomos/{numero}/indexar (PR-23) ------------------------------ #
+
+
+def test_indexar_tomo_responde_202_con_el_registro_inicial(datos_tmp):
+    r = _cliente().post("/api/tomos/999/indexar", json={})
+    assert r.status_code == 202
+    cuerpo = r.json()
+    assert cuerpo["numero"] == 999
+    assert cuerpo["estado"] == "registrado"
+    assert cuerpo["etapas_hechas"] == 0
+
+
+def test_indexar_sin_csjn_tomo_id_falla_en_descargar_y_queda_visible(datos_tmp):
+    # TestClient corre la BackgroundTask antes de devolver el control (a
+    # diferencia de un servidor real): para cuando el POST vuelve, el
+    # pipeline ya se frenó y el error tiene que verse en /api/estado.
+    r = _cliente().post("/api/tomos/999/indexar", json={})
+    assert r.status_code == 202
+
+    estado = _cliente().get("/api/estado").json()
+    tomo = estado["tomos"][0]
+    assert tomo["numero"] == 999
+    assert tomo["error"]["etapa"] == "descargar"
+    assert "csjn_tomo_id" in tomo["error"]["mensaje"]
+
+
+@pytest.fixture
+def _modelo_falso(monkeypatch):
+    from spectre.embed.base import EmbeddingModel
+
+    class _Falso(EmbeddingModel):
+        nombre = "falso-biblioteca"
+        dimension = 4
+
+        def embed(self, textos):
+            return [[1.0, 0.0, 0.0, 0.0] for _ in textos]
+
+    import spectre.embed as embed_pkg
+
+    monkeypatch.setattr(embed_pkg, "cargar_modelo", lambda nombre=None: _Falso())
+
+
+def test_indexar_desde_csjn_con_descarga_falsa_termina_indexado(
+    monkeypatch, datos_tmp, _modelo_falso
+):
+    from spectre.corpus.csjn.download import Descarga
+
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+
+    def descarga_falsa(csjn_tomo_id, destino, **_kwargs):
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(fixture.read_bytes())
+        return Descarga(
+            ruta=destino,
+            sha256="falso",
+            bytes=destino.stat().st_size,
+            reutilizada=False,
+        )
+
+    import spectre.corpus.csjn as csjn_pkg
+
+    monkeypatch.setattr(csjn_pkg, "descargar_tomo", descarga_falsa)
+
+    r = _cliente().post("/api/tomos/348/indexar", json={"csjn_tomo_id": "447"})
+    assert r.status_code == 202
+    assert r.json()["estado"] == "registrado"  # instantáneo, antes de correr
+
+    estado = _cliente().get("/api/estado").json()
+    tomo = estado["tomos"][0]
+    assert tomo["estado"] == "indexado"
+    assert tomo["etapas_hechas"] == 8
+    assert tomo["error"] is None
+    assert estado["chunks"] == 6
+
+
+def test_indexar_es_idempotente_sobre_un_tomo_ya_registrado(datos_tmp):
+    primero = _cliente().post("/api/tomos/999/indexar", json={}).json()
+    segundo = _cliente().post("/api/tomos/999/indexar", json={}).json()
+    assert primero["numero"] == segundo["numero"] == 999
+    # sigue frenado en la misma etapa, no duplica el tomo
+    estado = _cliente().get("/api/estado").json()
+    assert len(estado["tomos"]) == 1
+
+
+# --- POST /api/tomos/{numero}/subir (PR-23) --------------------------------- #
+
+
+def test_subir_pdf_no_pdf_da_400(datos_tmp):
+    r = _cliente().post(
+        "/api/tomos/348/subir",
+        files={"archivo": ("no-es-un-pdf.txt", b"hola", "text/plain")},
+    )
+    assert r.status_code == 400
+
+
+def test_subir_pdf_termina_indexado(datos_tmp, _modelo_falso):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    with open(fixture, "rb") as f:
+        r = _cliente().post(
+            "/api/tomos/348/subir",
+            files={"archivo": ("348.pdf", f, "application/pdf")},
+        )
+    assert r.status_code == 202
+    cuerpo = r.json()
+    assert cuerpo["numero"] == 348
+    assert cuerpo["estado"] == "descargado"  # salta la etapa `descargar` (D-9)
+
+    estado = _cliente().get("/api/estado").json()
+    tomo = estado["tomos"][0]
+    assert tomo["estado"] == "indexado"
+    assert tomo["etapas_hechas"] == 8
+    assert estado["chunks"] == 6
+
+    s = get_settings()
+    assert (s.tomos_dir / "348.pdf").is_file()

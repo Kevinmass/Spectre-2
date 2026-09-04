@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-22)
+## Estado del código (al cerrar PR-23)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -51,16 +51,26 @@ secciones + metadatos + citas salientes, recalculadas al vuelo con
 prima de un grafo de precedentes fuera del MVP, §8.3) — y `GET
 /api/tomos/{numero}/pdf` — sirve el PDF del tomo desde disco, para el enlace
 "ver en el PDF" con `#page=N` calculado con `pagina_oficial +
-tomos.offset_pagina`), `spectre/web/` (HTML/CSS/JS planos sin build: layout
-con dos tabs, Buscar y Biblioteca, más una vista de fallo sin tab propio
-—se llega clickeando un resultado—; Buscar ya busca de verdad —campo de
-consulta, resultados con cita `Fallos: N:N`, extracto con el término
-resaltado en `<mark>`, etiqueta de sección mayoría/voto/disidencia/
-dictamen—, la vista de fallo muestra el texto completo por sección,
-metadatos, citas salientes y el enlace al PDF en la página exacta del
-fragmento que trajo el resultado (no solo la primera página del fallo).
-Biblioteca todavía es de solo lectura, eso es PR-23). `spectre serve` levanta
-ese servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
+tomos.offset_pagina` —, y dos rutas que escriben (PR-23): `POST
+/api/tomos/{numero}/indexar` (registra o retoma un tomo por `csjn_tomo_id`,
+D-9) y `POST /api/tomos/{numero}/subir` (sube un PDF a mano a `data/tomos/`,
+D-9) — las dos arrancan `jobs.correr_pipeline` con `BackgroundTasks` de
+Starlette (el hilo del pool que ya trae el framework, no un worker casero) y
+devuelven 202 al toque; `GET /api/estado` agrega por tomo `etapas_hechas`/
+`etapas_total` (de `jobs.progreso`) y el `error` de la última etapa fallida
+si la hay — ninguna de las dos rutas de escritura reintenta sola una etapa
+ya fallida, mismo comportamiento que `spectre ingest` desde PR-19).
+`spectre/web/` (HTML/CSS/JS planos sin build: layout con dos tabs, Buscar y
+Biblioteca, más una vista de fallo sin tab propio —se llega clickeando un
+resultado—; Buscar ya busca de verdad —campo de consulta, resultados con
+cita `Fallos: N:N`, extracto con el término resaltado en `<mark>`, etiqueta
+de sección mayoría/voto/disidencia/dictamen—, la vista de fallo muestra el
+texto completo por sección, metadatos, citas salientes y el enlace al PDF en
+la página exacta del fragmento que trajo el resultado, y Biblioteca (PR-23)
+lista los tomos con su progreso (sondeado cada 2s mientras la pestaña está a
+la vista) y tiene los dos formularios —indexar por `csjn_tomo_id` o subir un
+PDF— para lanzar una indexación desde la UI). `spectre serve` levanta ese
+servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -198,8 +208,12 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
     resaltado y etiqueta de sección. Clickear un resultado abre la vista de
     fallo (PR-22): texto completo por sección, metadatos, citas salientes y
-    el enlace al PDF original en la página exacta del fragmento. Biblioteca
-    todavía es de solo lectura (PR-23 le agrega subir/indexar desde la UI).
+    el enlace al PDF original en la página exacta del fragmento. La pestaña
+    Biblioteca (PR-23) lista los tomos con su progreso y tiene los dos
+    formularios para lanzar una indexación desde la UI: por `csjn_tomo_id`
+    (D-9) o subiendo un PDF a mano — las dos corren el pipeline completo en
+    segundo plano (no bloquean el servidor) y el progreso se ve solo, sin
+    recargar la página.
 
 ## Tests
 

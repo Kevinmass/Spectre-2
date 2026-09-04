@@ -12,6 +12,7 @@
   --voto: #35577a;
   --disidencia: #9c3b2e;
   --dictamen: #6b6558;
+  --error: #9c3b2e;
 }
 
 * {
@@ -330,4 +331,77 @@ button.cita:disabled {
   margin: 0.3rem 0 0;
   color: var(--texto-tenue);
   font-size: 0.9rem;
+}
+
+.progreso-nota {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+}
+
+.progreso-error {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--error);
+}
+
+.acciones-biblioteca {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.form-tomo {
+  flex: 1 1 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+}
+
+.form-tomo h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.form-tomo label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--texto-tenue);
+}
+
+.form-tomo input {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.form-tomo button {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--acento);
+  border-radius: 6px;
+  background: var(--acento);
+  color: var(--acento-texto);
+  cursor: pointer;
+}
+
+.form-tomo button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#biblioteca-aviso {
+  margin-top: 1rem;
 }

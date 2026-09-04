@@ -539,10 +539,34 @@ sin reparsear.
   el Tomo 349 mapea exacto a `pdf_page` 745, que dice "739" en el
   encabezado). Ver bitácora PR-22.
 
-- [ ] **PR-23 `[N]` Biblioteca**
+- [x] **PR-23 `[N]` Biblioteca**
   Tomos disponibles, cuáles están indexados, cuáles requieren OCR, progreso de
   indexación, botón para indexar y para subir un PDF propio.
   *Acepta:* lanzar la indexación de un tomo desde la UI y ver el progreso.
+  Hecho: `POST /api/tomos/{numero}/indexar` (por `csjn_tomo_id`, D-9) y
+  `POST /api/tomos/{numero}/subir` (PDF a mano, D-9) registran el tomo al
+  toque (202) y arrancan `jobs.correr_pipeline` (PR-19) **en segundo plano**
+  con `BackgroundTasks` de Starlette — el hilo del pool que ya trae el
+  framework, no un worker casero (D-06): el pipeline puede tardar minutos
+  con el modelo real y un solo proceso FastAPI no puede bloquearse
+  esperando eso sin dejar de atender el resto de la UI, incluido el propio
+  polling de progreso. `GET /api/estado` (PR-20) ahora suma, por tomo,
+  `etapas_hechas`/`etapas_total` (de `jobs.progreso`) y el `error` de la
+  última etapa fallida si la hay — sin eso un tomo trabado se ve igual que
+  uno progresando. `spectre/web/`: la pestaña Biblioteca sondea
+  `/api/estado` cada 2s mientras está a la vista (se corta al salir) y
+  tiene los dos formularios. **Ninguna de las dos rutas reintenta sola una
+  etapa que ya falló** — mismo comportamiento que `spectre ingest` desde
+  PR-19, verificado leyendo el propio test de PR-19
+  (`test_correr_pipeline_no_reintenta_solo_una_etapa_fallida`) antes de
+  diseñar la UI alrededor: un tomo fallido se muestra con el error, un
+  segundo click en "indexar" no lo destraba (es honesto, no promete algo
+  que el pipeline no hace). Verificado de punta a punta contra un servidor
+  real (`spectre serve`, no `TestClient`): `curl -F archivo=@...pdf` a
+  `/subir` devuelve 202 al instante (`descargado`, 1/8) y, sondeando
+  `/api/estado` cada 2s mientras el servidor seguía respondiendo otras
+  requests, el tomo avanzó solo hasta `indexado` (8/8) sin que la subida
+  bloqueara nada. Ver bitácora PR-23.
 
 ### Fase 6 — Cierre del MVP (3 PRs)
 
@@ -615,5 +639,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-22 cerrados (04/09/2026).
-Próximo: **PR-23**.
+a PR-23 cerrados (04/09/2026).
+Próximo: **PR-24**.

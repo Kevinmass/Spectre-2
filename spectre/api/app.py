@@ -1,5 +1,5 @@
-"""Servidor FastAPI (PR-20/21/22): estático + estado real + búsqueda híbrida
-+ vista de fallo.
+"""Servidor FastAPI (PR-20/21/22/23): estático + estado real + búsqueda
+híbrida + vista de fallo + biblioteca.
 
 Sirve `spectre/web/` (HTML/CSS/JS planos, sin build) y expone rutas de solo
 lectura:
@@ -7,7 +7,10 @@ lectura:
 - `/api/estado`: sin ella, la interfaz no tiene forma de distinguir "no hay
   nada indexado todavía" de "hay resultados pero está mostrando 0" — mostrar
   cualquier cosa que no sea el estado real de la base sería el mismo defecto
-  que D-05 (ningún stub que reporte éxito) aplicado a la UI.
+  que D-05 (ningún stub que reporte éxito) aplicado a la UI. Desde PR-23
+  incluye, por tomo, el progreso del pipeline (`etapas_hechas`/`etapas_
+  total`, de `jobs.progreso`) y el error de la última etapa fallida si la
+  hay — sin eso, un tomo trabado se ve igual que uno que está progresando.
 - `/api/buscar` (PR-21): envuelve `search.buscar_hibrido` (PR-15) para la UI.
   El modelo de embeddings se cachea por instancia de app (cargarlo por
   request sería demasiado lento para el criterio de PR-21, "menos de 3
@@ -24,7 +27,24 @@ lectura:
   disco, para el enlace "ver en el PDF" de la vista de fallo (D-9: el PDF
   vive en disco, subido a mano o descargado; acá solo se lo expone).
 
-La gestión de la biblioteca (subir/indexar tomos desde la UI) es PR-23.
+Y dos rutas que escriben (PR-23, biblioteca):
+
+- `POST /api/tomos/{numero}/indexar`: registra el tomo (o retoma uno que ya
+  existe, D-9 importador de la CSJN) y corre el pipeline completo
+  (`jobs.correr_pipeline`, PR-19) **en segundo plano** (`BackgroundTasks` de
+  Starlette — hilo del pool que ya trae el framework, no un worker casero:
+  el pipeline puede tardar minutos con el modelo real, y un solo proceso
+  FastAPI no puede bloquearse esperando eso sin dejar de atender el resto de
+  la UI, incluido el polling de progreso de esta misma corrida). Responde
+  202 apenas el tomo queda registrado; el progreso se seguí por `/api/estado`.
+- `POST /api/tomos/{numero}/subir`: sube un PDF a mano (D-9) a `data/tomos/`
+  y arranca el mismo pipeline en segundo plano, saltando la etapa
+  `descargar`.
+
+Ninguna de las dos reintenta sola una etapa que ya falló (D-05, y es el
+mismo comportamiento que ya tenía `spectre ingest` desde PR-19) — el `error`
+de `/api/estado` está para que la UI lo diga, no para fingir que un click
+en "indexar" la destraba.
 """
 
 from __future__ import annotations
@@ -37,18 +57,67 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from spectre.config import get_settings
 from spectre.corpus.fallo import extraer_citas
-from spectre.db import Repo, connect
+from spectre.db import Repo, Tomo, connect, migrate
 from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
+from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
 from spectre.search import buscar_hibrido
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+def _error_de_etapa_fallida(conn: sqlite3.Connection, tomo: Tomo) -> dict | None:
+    """Si la próxima etapa de `tomo` tiene un job `fallido` como último
+    intento, el detalle (`etapa`, `mensaje`) — mismo criterio que
+    `cli._cmd_ingest`: un `fallido` no se reintenta solo (D-05), así que la
+    UI tiene que poder mostrarlo en vez de un progreso trabado sin
+    explicación."""
+    pendiente = siguiente_etapa(tomo)
+    if pendiente is None:
+        return None
+    etapa, _ = pendiente
+    fila = conn.execute(
+        "SELECT error FROM jobs WHERE tipo = ? AND estado = 'fallido'"
+        " ORDER BY id DESC LIMIT 1",
+        (f"pipeline.{etapa}",),
+    ).fetchone()
+    if fila is None:
+        return None
+    return {"etapa": etapa, "mensaje": fila["error"]}
+
+
+def _tomo_a_dict(conn: sqlite3.Connection, tomo: Tomo) -> dict:
+    hechas, total = progreso(tomo)
+    return {
+        "numero": tomo.numero,
+        "estado": tomo.estado,
+        "calidad": tomo.calidad,
+        "etapas_hechas": hechas,
+        "etapas_total": total,
+        "error": _error_de_etapa_fallida(conn, tomo),
+    }
+
+
+def _correr_pipeline_en_fondo(db_path: Path, tomo_id: int) -> None:
+    """Lo que corre `BackgroundTasks` para `/api/tomos/.../indexar` y
+    `/subir`: una conexión propia (la del request ya se cerró para cuando
+    esto arranca) y el mismo `correr_pipeline` que usa `spectre ingest`."""
+    conn = connect(db_path)
+    try:
+        correr_pipeline(conn, [tomo_id])
+    finally:
+        conn.close()
+
+
+class _IndexarPayload(BaseModel):
+    csjn_tomo_id: str | None = None
 
 
 def _terminos(consulta: str) -> list[str]:
@@ -118,10 +187,7 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         conn = connect(s.db_path)
         try:
             repo = Repo(conn)
-            tomos = [
-                {"numero": t.numero, "estado": t.estado, "calidad": t.calidad}
-                for t in repo.list_tomos()
-            ]
+            tomos = [_tomo_a_dict(conn, t) for t in repo.list_tomos()]
             return {"tomos": tomos, "chunks": repo.contar_chunks()}
         finally:
             conn.close()
@@ -271,6 +337,52 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 404, f"el PDF del tomo {numero} no está disponible en este servidor"
             )
         return FileResponse(tomo.pdf_path, media_type="application/pdf")
+
+    @app.post("/api/tomos/{numero}/indexar", status_code=202)
+    def indexar_tomo(
+        numero: int, payload: _IndexarPayload, background_tasks: BackgroundTasks
+    ) -> dict:
+        s = get_settings()
+        s.ensure_dirs()
+        conn = connect(s.db_path)
+        try:
+            migrate(conn)
+            repo = Repo(conn)
+            tomo_id = iniciar_tomo(
+                repo, numero=numero, csjn_tomo_id=payload.csjn_tomo_id
+            )
+            tomo = repo.get_tomo(tomo_id)
+            cuerpo = _tomo_a_dict(conn, tomo)
+        finally:
+            conn.close()
+
+        background_tasks.add_task(_correr_pipeline_en_fondo, s.db_path, tomo_id)
+        return cuerpo
+
+    @app.post("/api/tomos/{numero}/subir", status_code=202)
+    async def subir_tomo(
+        numero: int, background_tasks: BackgroundTasks, archivo: UploadFile
+    ) -> dict:
+        if not (archivo.filename or "").lower().endswith(".pdf"):
+            raise HTTPException(400, "el archivo tiene que ser un PDF")
+
+        s = get_settings()
+        s.ensure_dirs()
+        destino = s.tomos_dir / f"{numero}.pdf"
+        destino.write_bytes(await archivo.read())
+
+        conn = connect(s.db_path)
+        try:
+            migrate(conn)
+            repo = Repo(conn)
+            tomo_id = iniciar_tomo(repo, numero=numero, pdf_path=str(destino))
+            tomo = repo.get_tomo(tomo_id)
+            cuerpo = _tomo_a_dict(conn, tomo)
+        finally:
+            conn.close()
+
+        background_tasks.add_task(_correr_pipeline_en_fondo, s.db_path, tomo_id)
+        return cuerpo
 
     # Al final: StaticFiles(html=True) sirve index.html en "/" y es un
     # catch-all, así que las rutas de la API tienen que quedar registradas
