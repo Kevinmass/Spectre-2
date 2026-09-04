@@ -1,9 +1,15 @@
-"""Del tomo al fallo: índice de partes, segmentación, estructura y citas.
+"""Del tomo al fallo: índice de partes, segmentación, estructura, secciones y
+citas.
 
-Hoy `index_parser` (PR-06), `segmenter` (PR-07), `structure` (PR-08) y
-`sections` (PR-09). `citations` llega en PR-10.
+Hoy `index_parser` (PR-06), `segmenter` (PR-07), `structure` (PR-08),
+`sections` (PR-09) y `citations` (PR-10).
 """
 
+from spectre.corpus.fallo.citations import (
+    CitaExtraida,
+    contar_referencias,
+    extraer_citas,
+)
 from spectre.corpus.fallo.index_parser import (
     EntradaIndice,
     ResumenIndice,
@@ -26,6 +32,7 @@ from spectre.corpus.fallo.structure import (
 )
 
 __all__ = [
+    "CitaExtraida",
     "EntradaIndice",
     "FalloSegmentado",
     "MetadatosFallo",
@@ -33,6 +40,8 @@ __all__ = [
     "ResumenSegmentacion",
     "SeccionFallo",
     "analizar_indice",
+    "contar_referencias",
+    "extraer_citas",
     "extraer_metadatos",
     "localizar_indice_partes",
     "parsear_indice",

@@ -1,11 +1,12 @@
 """CLI de Spectre.
 
-Estado PR-09: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
+Estado PR-10: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
 y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
 con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
-`sections` parte cada fallo en dictamen / mayoría / votos / disidencias). El
-resto existe en `--help` pero **revienta si lo invocás** (D-05).
+`sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
+`citations` extrae las citas `Fallos: N:N` a precedentes). El resto existe en
+`--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -386,6 +387,76 @@ def _cmd_pdf_sections(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_citations(args: argparse.Namespace) -> int:
+    from collections import Counter
+
+    from spectre.corpus.fallo import (
+        contar_referencias,
+        extraer_citas,
+        parsear_indice,
+        segmentar,
+        texto_del_fallo,
+    )
+    from spectre.corpus.pdf import extraer_texto
+
+    tomo = args.tomo or _tomo_de_nombre(args.pdf)
+    if tomo is None:
+        raise SystemExit("no pude inferir el número de tomo del nombre; pasá --tomo")
+
+    paginas = extraer_texto(args.pdf)
+    por_oficial = {p.pagina_oficial: p for p in paginas if p.pagina_oficial is not None}
+    fin_cuerpo = max(por_oficial)
+    try:
+        entradas = parsear_indice(args.pdf)
+    except ValueError:
+        entradas = None
+    r = segmentar(entradas, paginas, tomo_numero=tomo)
+
+    por_fallo: list[tuple[str, list, int]] = []
+    for i, f in enumerate(r.fallos):
+        sig = r.fallos[i + 1].pagina_inicio if i + 1 < len(r.fallos) else None
+        texto = texto_del_fallo(
+            por_oficial,
+            pagina_inicio=f.pagina_inicio,
+            pagina_inicio_siguiente=sig,
+            pagina_fin_cuerpo=fin_cuerpo,
+        )
+        por_fallo.append((f.cita, extraer_citas(texto), contar_referencias(texto)))
+
+    if args.cita:
+        elegido = next((c for c in por_fallo if c[0] == args.cita), None)
+        if elegido is None:
+            raise SystemExit(f"no hay un fallo con cita {args.cita}")
+        cita, citas, refs = elegido
+        print(f"Fallos: {cita}  ({refs} referencias, {len(citas)} fallos citados)\n")
+        for c in citas:
+            print(f"  Fallos: {c.tomo_citado}:{c.pagina_citada}")
+            print(f"    {c.contexto}")
+        return 0
+
+    todas = [c for _, citas, _ in por_fallo for c in citas]
+    destinos = Counter((c.tomo_citado, c.pagina_citada) for c in todas)
+    citantes = sum(1 for _, citas, _ in por_fallo if citas)
+    filas = [
+        ("pdf", args.pdf),
+        ("fallos", len(por_fallo)),
+        ("referencias Fallos: N:N", sum(refs for _, _, refs in por_fallo)),
+        ("citas (fallo a fallo)", len(todas)),
+        ("destinos distintos", len(destinos)),
+        ("fallos citantes", f"{citantes}/{len(por_fallo)}"),
+        ("tomos citados distintos", len({t for t, _ in destinos})),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    mas_citados = destinos.most_common(5)
+    if mas_citados:
+        print("\nmás citados:")
+        for (t, p), n in mas_citados:
+            print(f"  Fallos: {t}:{p}  ({n})")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -487,6 +558,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--cita", help="detalla las secciones de un fallo (ej. 348:113)"
     )
     p_pdf_sections.set_defaults(func=_cmd_pdf_sections)
+
+    p_pdf_citations = pdf_sub.add_parser(
+        "citations",
+        help="Extrae las citas `Fallos: N:N` a precedentes de cada fallo",
+    )
+    p_pdf_citations.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_citations.add_argument(
+        "--tomo", type=int, help="número de tomo (si no, se infiere del nombre)"
+    )
+    p_pdf_citations.add_argument(
+        "--cita", help="lista las citas de un fallo con su contexto (ej. 348:113)"
+    )
+    p_pdf_citations.set_defaults(func=_cmd_pdf_citations)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

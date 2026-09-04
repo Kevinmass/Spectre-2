@@ -17,14 +17,14 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-09)
+## Estado del código (al cerrar PR-10)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
 `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
-`sections`). El resto del árbol de la §4 del plan (`corpus/fallo/citations`,
-`chunking/`, `embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía
-no hay código. La §9 del plan dice cuál es el próximo PR.
+`sections` + `citations`). El resto del árbol de la §4 del plan (`chunking/`,
+`embed/`, `index/`, `search/`, `api/`, `web/`) es objetivo: todavía no hay
+código. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -89,6 +89,17 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
     (encabezados, des-hifenado, versalitas) y mide la reducción de palabras.
+  - `spectre pdf index <pdf> [--muestra N]` — parsea el índice por nombres de
+    las partes y cuenta carátulas → página (PR-06).
+  - `spectre pdf segment <pdf> [--tomo N] [--muestra N]` — arma los fallos del
+    tomo (rango de página + cita `348:145`) desde el índice (PR-07).
+  - `spectre pdf meta <pdf> [--tomo N] [--muestra N]` — fecha, jueces, tipo de
+    recurso, tribunal de origen y partes de cada fallo (PR-08).
+  - `spectre pdf sections <pdf> [--tomo N] [--cita 348:113]` — parte cada fallo
+    en dictamen / mayoría / votos / disidencias (PR-09).
+  - `spectre pdf citations <pdf> [--tomo N] [--cita 348:189]` — extrae las citas
+    `Fallos: N:N` a precedentes; mide referencias y relación fallo→fallo (PR-10).
+  - Todos los `spectre pdf …` **miden, no persisten** (llenar SQLite es PR-19).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 

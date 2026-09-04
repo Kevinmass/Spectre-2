@@ -301,9 +301,15 @@ sin reparsear.
   línea de un encabezado cuando el apellido dobla de renglón). Ver bitácora
   PR-09.
 
-- [ ] **PR-10 `[V]` Extracción de citas**
+- [x] **PR-10 `[V]` Extracción de citas**
   Regex sobre `Fallos: N:N`, tabla de relaciones fallo → fallo citado.
   *Acepta:* 887 citas detectadas en el Tomo 348.
+  Medido: **934 referencias `Fallos:`** en el Tomo 348 (`contar_referencias`), a
+  +5,3% de las 887 — el gap es el 133≠126 fallos que arrastra PR-06/07. La tabla
+  `citas` guarda un `(tomo, página)` por fila, así que `extraer_citas` **expande**
+  cada cadena (`Fallos: A; B; C` = 3 precedentes): **2.006 citas fallo→fallo**,
+  1.369 destinos distintos, 179 tomos citados. 0 falsos positivos en 40 sitios
+  muestreados. Tomo 349: 728 referencias / 1.645 citas. Ver bitácora PR-10.
 
 ### Fase 3 — Índice y búsqueda (5 PRs)
 
@@ -450,5 +456,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-09 cerrados (03/09/2026).
-Próximo: **PR-10**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-10 cerrados (03/09/2026).
+Próximo: **PR-11**.

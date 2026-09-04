@@ -1,4 +1,4 @@
-"""PR-01/02/04/06-09 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
+"""PR-01/02/04/06-10 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
 
 from pathlib import Path
 
@@ -161,6 +161,33 @@ def test_pdf_sections_detalla_una_cita(capsys):
     assert "mayoria" in out
     assert "voto" in out
     assert "Ricardo Luis Lorenzetti" in out
+
+
+def test_pdf_citations_resume_el_tomo(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p189-246.pdf"
+    assert main(["pdf", "citations", str(fixture), "--tomo", "348"]) == 0
+    out = capsys.readouterr().out
+    assert "referencias Fallos: N:N" in out
+    assert "citas (fallo a fallo)" in out
+    assert "tomos citados distintos" in out
+
+
+def test_pdf_citations_detalla_una_cita(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p189-246.pdf"
+    assert (
+        main(["pdf", "citations", str(fixture), "--tomo", "348", "--cita", "348:189"])
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "Fallos: 337:315" in out  # cita real del fallo "Acevedo"
+    assert "referencias" in out
+
+
+def test_pdf_citations_cita_inexistente_es_error():
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p189-246.pdf"
+    with pytest.raises(SystemExit) as exc:
+        main(["pdf", "citations", str(fixture), "--tomo", "348", "--cita", "999:1"])
+    assert "999:1" in str(exc.value)
 
 
 def test_pdf_sin_accion_es_error():
