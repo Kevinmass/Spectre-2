@@ -1,5 +1,7 @@
-"""PR-01/02/04/06-11 — `--help` anda, `db` migra, `pdf` mide, los vacíos revientan."""
+"""PR-01/02/04/06-12 — `--help` anda, `db` migra, `pdf` mide, `embed` reporta,
+los vacíos revientan."""
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -220,6 +222,52 @@ def test_pdf_chunks_solape_invalido_es_error():
 def test_pdf_sin_accion_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["pdf"])
+    assert exc.value.code != 0
+
+
+# --- embed (PR-12) ------------------------------------------------------ #
+
+_TIENE_ST = importlib.util.find_spec("sentence_transformers") is not None
+
+
+def test_embed_status_sin_base(capsys, datos_tmp):
+    assert main(["embed", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "modelo (config)" in out
+    assert "no existe" in out
+
+
+def test_embed_status_con_chunks(capsys, datos_tmp):
+    main(["db", "migrate"])
+    capsys.readouterr()
+    from spectre.db import Repo, connect
+
+    conn = connect(get_settings().db_path)
+    repo = Repo(conn)
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.insert_chunks(fallo_id, [(None, i, f"t{i}", None) for i in range(4)])
+    conn.close()
+
+    assert main(["embed", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "chunks" in out
+    assert "4" in out  # 4 chunks, 4 pendientes
+    assert "pendientes de embedding" in out
+
+
+@pytest.mark.skipif(
+    _TIENE_ST, reason="sentence-transformers instalado: probe cargaría el modelo real"
+)
+def test_embed_probe_sin_sentence_transformers_falla_claro():
+    with pytest.raises(SystemExit) as exc:
+        main(["embed", "probe", "un texto de prueba"])
+    assert ".[embed]" in str(exc.value)
+
+
+def test_embed_sin_accion_es_error():
+    with pytest.raises(SystemExit) as exc:
+        main(["embed"])
     assert exc.value.code != 0
 
 

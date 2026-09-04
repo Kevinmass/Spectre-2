@@ -157,6 +157,22 @@ class Fallo:
     jueces: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class Chunk:
+    """Una fila de `chunks`. `modelo_embedding` / `embedding_at` en `None` = el
+    chunk todavía no se embebió (o se embebió con otro modelo y hay que
+    rehacerlo)."""
+
+    id: int
+    fallo_id: int
+    seccion_id: int | None
+    orden: int
+    texto: str
+    pagina_oficial: int | None
+    modelo_embedding: str | None
+    embedding_at: str | None
+
+
 def _tomo(row: sqlite3.Row | None) -> Tomo | None:
     return Tomo(**row) if row is not None else None
 
@@ -387,3 +403,78 @@ class Repo:
                 (tomo_id,),
             )
         ]
+
+    # -- chunks -------------------------------------------------------- #
+
+    def insert_chunks(
+        self,
+        fallo_id: int,
+        filas: Iterable[tuple[int | None, int, str, int | None]],
+    ) -> int:
+        """Inserta chunks de un fallo en lote. Cada fila es
+        `(seccion_id, orden, texto, pagina_oficial)`. `modelo_embedding` y
+        `embedding_at` arrancan en NULL: los pone el embebido (PR-12+), no la
+        inserción. Devuelve cuántos insertó."""
+        datos = [
+            (fallo_id, seccion_id, orden, texto, pagina_oficial)
+            for seccion_id, orden, texto, pagina_oficial in filas
+        ]
+        self.conn.executemany(
+            "INSERT INTO chunks (fallo_id, seccion_id, orden, texto, pagina_oficial)"
+            " VALUES (?, ?, ?, ?, ?)",
+            datos,
+        )
+        self.conn.commit()
+        return len(datos)
+
+    def list_chunks_de_fallo(self, fallo_id: int) -> list[Chunk]:
+        return [
+            Chunk(**row)
+            for row in self.conn.execute(
+                "SELECT * FROM chunks WHERE fallo_id = ?"
+                " ORDER BY seccion_id, orden, id",
+                (fallo_id,),
+            )
+        ]
+
+    def chunks_pendientes_de_embedding(
+        self, modelo: str, *, limite: int | None = None
+    ) -> list[Chunk]:
+        """Los chunks que todavía **no** tienen embedding con `modelo`: los que
+        nunca se embebieron (`modelo_embedding IS NULL`) y los que se embebieron
+        con otro modelo. Esta es la consulta que hace barato cambiar de modelo
+        (D-7/D-8): reindexar es rehacer estos, sin tocar un solo PDF."""
+        sql = (
+            "SELECT * FROM chunks"
+            " WHERE modelo_embedding IS NULL OR modelo_embedding <> ?"
+            " ORDER BY id"
+        )
+        params: tuple[object, ...] = (modelo,)
+        if limite is not None:
+            sql += " LIMIT ?"
+            params += (limite,)
+        return [Chunk(**row) for row in self.conn.execute(sql, params)]
+
+    def contar_chunks(self) -> int:
+        return int(self.conn.execute("SELECT count(*) FROM chunks").fetchone()[0])
+
+    def contar_chunks_pendientes(self, modelo: str) -> int:
+        return int(
+            self.conn.execute(
+                "SELECT count(*) FROM chunks"
+                " WHERE modelo_embedding IS NULL OR modelo_embedding <> ?",
+                (modelo,),
+            ).fetchone()[0]
+        )
+
+    def marcar_chunks_embebidos(self, ids: Iterable[int], modelo: str) -> int:
+        """Registra que estos chunks quedaron embebidos con `modelo`, ahora.
+        Devuelve cuántas filas tocó."""
+        cuando = ahora_iso()
+        datos = [(modelo, cuando, chunk_id) for chunk_id in ids]
+        self.conn.executemany(
+            "UPDATE chunks SET modelo_embedding = ?, embedding_at = ? WHERE id = ?",
+            datos,
+        )
+        self.conn.commit()
+        return len(datos)

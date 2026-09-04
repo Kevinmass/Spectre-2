@@ -17,15 +17,18 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-11)
+## Estado del código (al cerrar PR-12)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
-migraciones), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
-`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
+migraciones; el repo ya maneja chunks y el registro del modelo de embedding),
+`spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` + `clean`),
+`spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
 `sections` + `citations`), `spectre/chunking/` (`chunker`: ventanas de ~400
-palabras por sección). El resto del árbol de la §4 del plan (`embed/`, `index/`,
-`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9 del plan
-dice cuál es el próximo PR.
+palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
+`local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
+`[embed]`). El resto del árbol de la §4 del plan (`index/`, `search/`, `api/`,
+`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
+próximo PR.
 
 ## Reglas de trabajo
 
@@ -78,6 +81,10 @@ Todo corre en el venv del repo. En esta máquina (Windows) no hay Python 3.11
 instalado: el `.venv` es 3.13 y **CI valida contra 3.11** (`.github/workflows/ci.yml`).
 Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
 
+`sentence-transformers` (PR-12, embeddings reales) es el extra opcional
+`[embed]` — arrastra torch, CI **no** lo instala y el `.venv` tampoco lo tiene.
+Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
+
 - `python -m pytest` — corre la suite (rápida; excluye `-m slow`). Un solo test:
   `python -m pytest tests/test_db.py::nombre`. La marca `slow` es la medición de
   aceptación sobre el Tomo 348 completo (~2 min, necesita `data/tomos/348.pdf`):
@@ -106,6 +113,10 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
     [--solape N]` — fragmenta cada sección en ventanas de ~400 palabras con 80
     de solape; verifica que ningún chunk cruza el borde de sección (PR-11).
   - Todos los `spectre pdf …` **miden, no persisten** (llenar SQLite es PR-19).
+  - `spectre embed status` — modelo de la config y cuántos chunks de la base
+    están pendientes de (re)embedding con ese modelo (criterio de PR-12).
+    `spectre embed probe "<texto>" [--modelo M]` — carga el modelo real y embebe
+    (necesita el extra `[embed]`; sin él, revienta claro).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 

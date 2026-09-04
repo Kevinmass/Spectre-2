@@ -1,13 +1,14 @@
 """CLI de Spectre.
 
-Estado PR-11: subcomandos reales `config` (rutas resueltas), `db` (migraciones)
-y `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
+Estado PR-12: subcomandos reales `config` (rutas resueltas), `db` (migraciones),
+`pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
 con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 `sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
 `citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
-cada sección en ventanas de ~400 palabras). El resto existe en `--help` pero
-**revienta si lo invocás** (D-05).
+cada sección en ventanas de ~400 palabras) y `embed` (`status` dice qué chunks
+hay que reindexar, `probe` embebe un texto con el modelo real). El resto existe
+en `--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -580,6 +581,48 @@ def _cmd_pdf_chunks(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_embed_status(_args: argparse.Namespace) -> int:
+    from spectre.db import Repo, connect
+
+    s = get_settings()
+    modelo = s.embedding_model
+    print(f"{'modelo (config)'.ljust(28)}  {modelo}")
+    if not s.db_path.exists():
+        print(
+            f"{'base'.ljust(28)}  {s.db_path}  (no existe — corré `spectre db migrate`)"
+        )
+        return 0
+    conn = connect(s.db_path)
+    try:
+        total = Repo(conn).contar_chunks()
+        pendientes = Repo(conn).contar_chunks_pendientes(modelo)
+    finally:
+        conn.close()
+    print(f"{'base'.ljust(28)}  {s.db_path}")
+    print(f"{'chunks'.ljust(28)}  {total}")
+    print(
+        f"{'pendientes de embedding'.ljust(28)}  {pendientes}/{total}  (con {modelo})"
+    )
+    return 0
+
+
+def _cmd_embed_probe(args: argparse.Namespace) -> int:
+    from spectre.embed import cargar_modelo
+
+    modelo = cargar_modelo(args.modelo)
+    try:
+        vectores = modelo.embed(args.textos)
+        dimension = modelo.dimension
+    except ModuleNotFoundError as e:
+        raise SystemExit(str(e)) from e
+    print(f"modelo     {modelo.nombre}")
+    print(f"dimension  {dimension}")
+    for texto, vector in zip(args.textos, vectores, strict=True):
+        cabeza = ", ".join(f"{x:+.4f}" for x in vector[:8])
+        print(f"  [{cabeza}, ...]  {texto[:60]}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -713,6 +756,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--solape", type=int, default=80, metavar="N", help="palabras de solape"
     )
     p_pdf_chunks.set_defaults(func=_cmd_pdf_chunks)
+
+    p_embed = sub.add_parser("embed", help="Modelo de embeddings: estado y prueba")
+    embed_sub = p_embed.add_subparsers(
+        dest="embed_command", required=True, metavar="<acción>"
+    )
+    p_embed_status = embed_sub.add_parser(
+        "status", help="Modelo configurado y chunks pendientes de (re)embedding"
+    )
+    p_embed_status.set_defaults(func=_cmd_embed_status)
+    p_embed_probe = embed_sub.add_parser(
+        "probe", help="Carga el modelo y embebe uno o más textos de prueba"
+    )
+    p_embed_probe.add_argument("textos", nargs="+", help="texto(s) a embeber")
+    p_embed_probe.add_argument(
+        "--modelo", help="usar este modelo en vez del de la config"
+    )
+    p_embed_probe.set_defaults(func=_cmd_embed_probe)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

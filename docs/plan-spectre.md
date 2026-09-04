@@ -327,11 +327,18 @@ sin reparsear.
   los chunks hereda su `pagina_oficial` ubicándose en el texto por página; el
   resto cae en la página de inicio del fallo. Ver bitácora PR-11.
 
-- [ ] **PR-12 `[N]` Interfaz de embeddings + implementación local**
+- [x] **PR-12 `[N]` Interfaz de embeddings + implementación local**
   `EmbeddingModel`, implementación con sentence-transformers, registro del
   modelo por chunk.
   *Acepta:* cambiar el modelo en la config y ver que el sistema identifica los
   chunks a reindexar sin tocar los PDFs.
+  Hecho: interfaz `EmbeddingModel` (`spectre/embed/base.py`) + `ModeloLocalST`
+  (sentence-transformers, 384 dim, CPU, carga perezosa, extra opcional
+  `[embed]`). `Repo.chunks_pendientes_de_embedding(modelo)` devuelve los chunks
+  con `modelo_embedding` NULL o distinto → cambiar el modelo en la config marca
+  todo pendiente, sin abrir un PDF (verificado con `spectre embed status`). El
+  modelo real (que baja torch) es dependencia opcional y su test es `slow`; sin
+  el paquete, `ModeloLocalST` revienta claro (D-05). Ver bitácora PR-12.
 
 - [ ] **PR-13 `[N]` Índice vectorial**
   LanceDB, escritura por lotes, reanudable.
@@ -463,5 +470,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-11 cerrados (03/09/2026).
-Próximo: **PR-12**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026).
+Próximo: **PR-13**.
