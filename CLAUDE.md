@@ -17,19 +17,20 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-13)
+## Estado del código (al cerrar PR-14)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
-migraciones; el repo ya maneja chunks y el registro del modelo de embedding),
-`spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` + `clean`),
-`spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
+migraciones; el repo ya maneja chunks, el registro del modelo de embedding y
+`get_chunk`), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
+`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
 `sections` + `citations`), `spectre/chunking/` (`chunker`: ventanas de ~400
 palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
 `local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
 `[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
-`data/vectors/`). El resto del árbol de la §4 del plan (`index/lexical`,
-`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9 del plan
-dice cuál es el próximo PR.
+`data/vectors/`; `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la
+propia base SQLite, sincronizada sola por triggers). El resto del árbol de la
+§4 del plan (`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La
+§9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -122,7 +123,10 @@ Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
     `spectre embed probe "<texto>" [--modelo M]` — carga el modelo real y embebe
     (necesita el extra `[embed]`; sin él, revienta claro).
   - `spectre index status` — vectores en el índice LanceDB (`data/vectors/`),
-    por modelo, y cuántos chunks de SQLite faltan indexar (PR-13).
+    por modelo, cuántos chunks de SQLite faltan indexar (PR-13) y cuántos hay
+    en el índice léxico FTS5 (PR-14). `spectre index buscar "<consulta>"
+    [--k N]` — corre la consulta contra `chunks_fts` y muestra cita + extracto
+    de cada resultado (mide/prueba a mano; la búsqueda fusionada es PR-15).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 

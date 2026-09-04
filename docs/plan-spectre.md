@@ -353,9 +353,21 @@ sin reparsear.
   embeddings reales) es `slow` y necesita `[embed]` (torch); no corrió en esta
   sesión. `lancedb` pasó a dep dura. Ver bitácora PR-13.
 
-- [ ] **PR-14 `[N]` Índice léxico**
+- [x] **PR-14 `[N]` Índice léxico**
   FTS5 configurado para español.
   *Acepta:* buscar `"artículo 14 de la ley 48"` devuelve los fallos correctos.
+  Hecho: migración `0003_chunks_fts.sql` — tabla virtual `chunks_fts`
+  (external content sobre `chunks`, `unicode61 remove_diacritics 2`) más los
+  triggers `AFTER INSERT/UPDATE/DELETE` que la mantienen sincronizada sola,
+  sin que `db/repo.py` tenga que saberlo. `spectre/index/lexical.py` —
+  `IndiceLexico.buscar()` arma un AND implícito de los términos de la consulta
+  (cada uno entre comillas, para que ningún carácter de sintaxis FTS5 del
+  usuario rompa la consulta). Verificado sobre el Tomo 348 completo (1.112
+  chunks, igual que PR-11): el índice queda con 1.112 filas, y buscar
+  "artículo 14 de la ley 48" (48 apariciones reales en el tomo) devuelve
+  resultados no vacíos con la frase literal ya en el primer puesto. `spectre
+  index status` reporta también el índice léxico; nuevo `spectre index
+  buscar`. Ver bitácora PR-14.
 
 - [ ] **PR-15 `[N]` Búsqueda híbrida**
   Fusión RRF de las dos listas; filtros por año, tribunal y tipo de sección.
@@ -478,5 +490,6 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13 cerrado (04/09/2026).
-Próximo: **PR-14**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
+y PR-14 cerrados (04/09/2026).
+Próximo: **PR-15**.
