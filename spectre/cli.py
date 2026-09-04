@@ -1,16 +1,17 @@
 """CLI de Spectre.
 
-Estado PR-14: subcomandos reales `config` (rutas resueltas), `db` (migraciones),
-`pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
-`index` parsea el índice por nombres de las partes, `segment` arma los fallos
-con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
-`sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
-`citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
-cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
-hay que reindexar, `probe` embebe un texto con el modelo real) e `index`
-(`status` mira los índices vectorial LanceDB y léxico FTS5, `buscar` corre una
-consulta contra el léxico). El resto existe en `--help` pero **revienta si lo
-invocás** (D-05).
+Estado PR-15: subcomandos reales `config` (rutas resueltas), `db`
+(migraciones), `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza
+de texto, `index` parsea el índice por nombres de las partes, `segment` arma
+los fallos con su cita, `meta` extrae fecha / jueces / recurso / tribunal /
+partes, `sections` parte cada fallo en dictamen / mayoría / votos /
+disidencias, `citations` extrae las citas `Fallos: N:N` a precedentes,
+`chunks` fragmenta cada sección en ventanas de ~400 palabras), `embed`
+(`status` dice qué chunks hay que reindexar, `probe` embebe un texto con el
+modelo real), `index` (`status` mira los índices vectorial LanceDB y léxico
+FTS5, `buscar` corre una consulta contra el léxico solo) y `search`
+(`buscar` fusiona léxico + vectorial por RRF, con filtros de año / tribunal /
+sección). El resto existe en `--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -696,6 +697,63 @@ def _cmd_index_buscar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_search_buscar(args: argparse.Namespace) -> int:
+    from spectre.db import Repo, connect
+    from spectre.index import IndiceVectorial
+    from spectre.search import buscar_hibrido
+
+    s = get_settings()
+    if not s.db_path.exists():
+        raise SystemExit(
+            f"la base no existe todavía ({s.db_path}) — corré `spectre db migrate`"
+        )
+
+    vector = None
+    if not args.solo_lexico:
+        from spectre.embed import cargar_modelo
+
+        modelo = cargar_modelo()
+        try:
+            vector = modelo.embed_uno(args.consulta)
+        except ModuleNotFoundError as e:
+            raise SystemExit(f"{e}  (o corré con --solo-lexico)") from e
+
+    conn = connect(s.db_path)
+    try:
+        idx_vec = IndiceVectorial(s.vectors_dir)
+        repo = Repo(conn)
+        resultados = buscar_hibrido(
+            conn,
+            idx_vec,
+            args.consulta,
+            vector,
+            k=args.k,
+            candidatos=args.candidatos,
+            anio=args.anio,
+            tribunal_origen=args.tribunal,
+            tipo_seccion=args.seccion,
+        )
+        print(f"consulta: {args.consulta!r}  ({len(resultados)} resultados)\n")
+        for r in resultados:
+            chunk = repo.get_chunk(r.chunk_id)
+            fallo = repo.get_fallo(chunk.fallo_id) if chunk else None
+            cita = fallo.cita if fallo else "?"
+            caratula = fallo.caratula if fallo else "?"
+            extracto = " ".join(chunk.texto.split())[:120] if chunk else ""
+            en = []
+            if r.rank_lexico is not None:
+                en.append(f"léxico #{r.rank_lexico + 1}")
+            if r.rank_vectorial is not None:
+                en.append(f"vectorial #{r.rank_vectorial + 1}")
+            print(
+                f"  [rrf {r.score:.4f}]  ({', '.join(en)})  Fallos: {cita}  {caratula}"
+            )
+            print(f"    {extracto}...")
+    finally:
+        conn.close()
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -865,6 +923,40 @@ def build_parser() -> argparse.ArgumentParser:
         "--k", type=int, default=10, metavar="N", help="cuántos resultados traer"
     )
     p_index_buscar.set_defaults(func=_cmd_index_buscar)
+
+    p_search = sub.add_parser("search", help="Búsqueda híbrida: léxico + vectorial")
+    search_sub = p_search.add_subparsers(
+        dest="search_command", required=True, metavar="<acción>"
+    )
+    p_search_buscar = search_sub.add_parser(
+        "buscar", help="Fusiona FTS5 y LanceDB por RRF, con filtros opcionales"
+    )
+    p_search_buscar.add_argument("consulta", help="texto a buscar")
+    p_search_buscar.add_argument(
+        "--k", type=int, default=10, metavar="N", help="cuántos resultados traer"
+    )
+    p_search_buscar.add_argument(
+        "--candidatos",
+        type=int,
+        default=50,
+        metavar="N",
+        help="candidatos por índice antes de fusionar y filtrar",
+    )
+    p_search_buscar.add_argument("--anio", type=int, help="filtra por año del fallo")
+    p_search_buscar.add_argument(
+        "--tribunal", help="filtra por tribunal de origen (match exacto)"
+    )
+    p_search_buscar.add_argument(
+        "--seccion",
+        choices=["mayoria", "voto", "disidencia", "dictamen"],
+        help="filtra por tipo de sección",
+    )
+    p_search_buscar.add_argument(
+        "--solo-lexico",
+        action="store_true",
+        help="no embebe la consulta: solo busca en el índice léxico",
+    )
+    p_search_buscar.set_defaults(func=_cmd_search_buscar)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

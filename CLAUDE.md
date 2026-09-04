@@ -17,20 +17,22 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-14)
+## Estado del código (al cerrar PR-15)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
-migraciones; el repo ya maneja chunks, el registro del modelo de embedding y
-`get_chunk`), `spectre/jobs/runner.py`, `spectre/corpus/pdf/` (`extract` +
-`clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` + `structure` +
-`sections` + `citations`), `spectre/chunking/` (`chunker`: ventanas de ~400
-palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
-`local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
+migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
+`get_chunk` y `filtrar_chunks`), `spectre/jobs/runner.py`, `spectre/corpus/pdf/`
+(`extract` + `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` +
+`structure` + `sections` + `citations`), `spectre/chunking/` (`chunker`:
+ventanas de ~400 palabras por sección), `spectre/embed/` (`base.EmbeddingModel`
++ `local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
 `[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
 `data/vectors/`; `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la
-propia base SQLite, sincronizada sola por triggers). El resto del árbol de la
-§4 del plan (`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La
-§9 del plan dice cuál es el próximo PR.
+propia base SQLite, sincronizada sola por triggers), `spectre/search/`
+(`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
+tribunal / tipo de sección). El resto del árbol de la §4 del plan (`api/`,
+`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
+próximo PR.
 
 ## Reglas de trabajo
 
@@ -87,8 +89,10 @@ Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
 `lancedb` (PR-13, índice vectorial) es dependencia **dura**: `pip install -e
 ".[dev]"` la trae (arrastra pyarrow + numpy, no torch) y CI la ejercita.
 `sentence-transformers` (PR-12, embeddings reales) es el extra **opcional**
-`[embed]` — arrastra torch, CI **no** lo instala y el `.venv` tampoco lo tiene.
-Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
+`[embed]` — arrastra torch, CI **no** lo instala. Instalado en el `.venv` de
+esta máquina desde PR-15 (`pip install -e ".[embed]"`, sentence-transformers
+6.0.1 / torch 2.14.0): los `slow` que necesitan el modelo real corren acá sin
+paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
 
 - `python -m pytest` — corre la suite (rápida; excluye `-m slow`). Un solo test:
   `python -m pytest tests/test_db.py::nombre`. La marca `slow` es la medición de
@@ -125,8 +129,12 @@ Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
   - `spectre index status` — vectores en el índice LanceDB (`data/vectors/`),
     por modelo, cuántos chunks de SQLite faltan indexar (PR-13) y cuántos hay
     en el índice léxico FTS5 (PR-14). `spectre index buscar "<consulta>"
-    [--k N]` — corre la consulta contra `chunks_fts` y muestra cita + extracto
-    de cada resultado (mide/prueba a mano; la búsqueda fusionada es PR-15).
+    [--k N]` — corre la consulta contra `chunks_fts` solo (léxico puro).
+  - `spectre search buscar "<consulta>" [--k N] [--candidatos N] [--anio N]
+    [--tribunal T] [--seccion mayoria|voto|disidencia|dictamen]
+    [--solo-lexico]` — fusiona léxico + vectorial por RRF (PR-15); embebe la
+    consulta con el modelo real salvo que se pase `--solo-lexico` (no necesita
+    `[embed]` en ese caso).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 

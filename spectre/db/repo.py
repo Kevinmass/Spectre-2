@@ -466,6 +466,45 @@ class Repo:
             params += (limite,)
         return [Chunk(**row) for row in self.conn.execute(sql, params)]
 
+    def filtrar_chunks(
+        self,
+        ids: Iterable[int],
+        *,
+        anio: int | None = None,
+        tribunal_origen: str | None = None,
+        tipo_seccion: str | None = None,
+    ) -> set[int]:
+        """De `ids`, cuáles cumplen los filtros pedidos (año de `fallos.fecha`,
+        tribunal de origen exacto, tipo de sección exacto). Sin filtros, es
+        simplemente `set(ids)` — para búsqueda híbrida (PR-15), que filtra
+        *después* de traer candidatos de cada índice: ni LanceDB ni FTS5 saben
+        de año/tribunal/sección, esos metadatos viven en `fallos`/`secciones`.
+        """
+        ids = list(ids)
+        if not ids:
+            return set()
+        condiciones = []
+        params: list[object] = []
+        if anio is not None:
+            condiciones.append("substr(f.fecha, 1, 4) = ?")
+            params.append(str(anio))
+        if tribunal_origen is not None:
+            condiciones.append("f.tribunal_origen = ?")
+            params.append(tribunal_origen)
+        if tipo_seccion is not None:
+            condiciones.append("s.tipo = ?")
+            params.append(tipo_seccion)
+        where = (" AND " + " AND ".join(condiciones)) if condiciones else ""
+        marcadores = ", ".join("?" * len(ids))
+        sql = (
+            "SELECT c.id FROM chunks c"
+            " JOIN fallos f ON f.id = c.fallo_id"
+            " LEFT JOIN secciones s ON s.id = c.seccion_id"
+            f" WHERE c.id IN ({marcadores}){where}"
+        )
+        filas = self.conn.execute(sql, (*ids, *params))
+        return {int(row[0]) for row in filas}
+
     def contar_chunks(self) -> int:
         return int(self.conn.execute("SELECT count(*) FROM chunks").fetchone()[0])
 
