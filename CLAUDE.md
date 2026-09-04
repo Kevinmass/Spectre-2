@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-16)
+## Estado del código (al cerrar PR-17)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
@@ -25,16 +25,18 @@ migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
 (`extract` + `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` +
 `structure` + `sections` + `citations`), `spectre/corpus/csjn/` (`catalog`:
 lista los tomos del sitio oficial — número, volumen, año, id CSJN — sin
-persistir), `spectre/chunking/` (`chunker`: ventanas de ~400 palabras por
-sección), `spectre/embed/` (`base.EmbeddingModel` + `local_st.ModeloLocalST`,
-sentence-transformers detrás del extra opcional `[embed]`), `spectre/index/`
-(`vectors.IndiceVectorial`, LanceDB embebido en `data/vectors/`;
-`lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
-SQLite, sincronizada sola por triggers), `spectre/search/`
+persistir; `download`: baja el PDF de un tomo con reintentos y caché por
+archivo, sin resume por Range —el servidor lo ignora—, así que "reanudar" es
+a nivel de archivo completo), `spectre/chunking/` (`chunker`: ventanas de ~400
+palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
+`local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
+`[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
+`data/vectors/`; `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la
+propia base SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
-tribunal / tipo de sección). El resto del árbol de la §4 del plan
-(`corpus/csjn/download`, `api/`, `web/`) es objetivo: todavía no hay código. La
-§9 del plan dice cuál es el próximo PR.
+tribunal / tipo de sección). El resto del árbol de la §4 del plan (`api/`,
+`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
+próximo PR.
 
 ## Reglas de trabajo
 
@@ -110,7 +112,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
   - `spectre csjn catalog [--muestra N]` — lista los tomos del sitio oficial de
     la CSJN (número, volumen, año, id CSJN); mide, no persiste (persistir es
-    de PR-17 en adelante). Necesita red real.
+    de PR-19 en adelante). Necesita red real.
+  - `spectre csjn download <tomo_id> <destino> [--forzar]` — baja el PDF de
+    un tomo (el `tomo_id` lo da `csjn catalog`) con reintentos y caché: si
+    `destino` ya existe no pide nada, salvo `--forzar`. Necesita red real.
   - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo

@@ -1,18 +1,19 @@
 """CLI de Spectre.
 
-Estado PR-16: subcomandos reales `config` (rutas resueltas), `db`
+Estado PR-17: subcomandos reales `config` (rutas resueltas), `db`
 (migraciones), `csjn` (`catalog` lista los tomos del sitio oficial: número,
-volumen, año, id CSJN), `pdf` (`stats` mide extracción/offset, `clean` mide la
-limpieza de texto, `index` parsea el índice por nombres de las partes,
-`segment` arma los fallos con su cita, `meta` extrae fecha / jueces / recurso /
-tribunal / partes, `sections` parte cada fallo en dictamen / mayoría / votos /
-disidencias, `citations` extrae las citas `Fallos: N:N` a precedentes,
-`chunks` fragmenta cada sección en ventanas de ~400 palabras), `embed`
-(`status` dice qué chunks hay que reindexar, `probe` embebe un texto con el
-modelo real), `index` (`status` mira los índices vectorial LanceDB y léxico
-FTS5, `buscar` corre una consulta contra el léxico solo) y `search`
-(`buscar` fusiona léxico + vectorial por RRF, con filtros de año / tribunal /
-sección). El resto existe en `--help` pero **revienta si lo invocás** (D-05).
+volumen, año, id CSJN; `download` baja el PDF de un tomo con reintentos y
+caché), `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de
+texto, `index` parsea el índice por nombres de las partes, `segment` arma los
+fallos con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
+`sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
+`citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
+cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
+hay que reindexar, `probe` embebe un texto con el modelo real), `index`
+(`status` mira los índices vectorial LanceDB y léxico FTS5, `buscar` corre una
+consulta contra el léxico solo) y `search` (`buscar` fusiona léxico +
+vectorial por RRF, con filtros de año / tribunal / sección). El resto existe
+en `--help` pero **revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -783,6 +784,25 @@ def _cmd_csjn_catalog(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_csjn_download(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from spectre.corpus.csjn import descargar_tomo
+
+    destino = Path(args.destino)
+    r = descargar_tomo(args.tomo_id, destino, forzar=args.forzar)
+    filas = [
+        ("ruta", r.ruta),
+        ("bytes", r.bytes),
+        ("sha256", r.sha256),
+        ("ya estaba en disco", "sí" if r.reutilizada else "no (se descargó ahora)"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -827,6 +847,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="N", help="imprime las primeras N filas"
     )
     p_csjn_catalog.set_defaults(func=_cmd_csjn_catalog)
+    p_csjn_download = csjn_sub.add_parser(
+        "download",
+        help="Descarga el PDF de un tomo (por su id de la CSJN) a disco",
+    )
+    p_csjn_download.add_argument("tomo_id", help="csjn_tomo_id (lo da `csjn catalog`)")
+    p_csjn_download.add_argument("destino", help="ruta donde guardar el PDF")
+    p_csjn_download.add_argument(
+        "--forzar",
+        action="store_true",
+        help="vuelve a descargar aunque el destino ya exista",
+    )
+    p_csjn_download.set_defaults(func=_cmd_csjn_download)
 
     p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
     pdf_sub = p_pdf.add_subparsers(

@@ -403,9 +403,20 @@ sin reparsear.
   tomos viejos (hasta ~1917) es un rango de texto (`"1898/1899"`), no un
   entero. `spectre csjn catalog`. Ver bitácora PR-16.
 
-- [ ] **PR-17 `[N]` Descargador**
+- [x] **PR-17 `[N]` Descargador**
   Reintentos, caché en disco por sha256, ritmo respetuoso con el servidor.
   *Acepta:* descargar 3 tomos, verificar hashes, reanudar una descarga cortada.
+  Hecho: `spectre/corpus/csjn/download.py` — `descargar_tomo` (reintentos con
+  backoff, caché por archivo: si el destino ya existe no pide nada) y
+  `descargar_varios` (pausa entre tomos). **Spike de este PR**: el servidor
+  ignora el header `Range` (probado con un tomo de 58 MB: `200 OK` con el
+  archivo completo, no `206 Partial Content`), así que "reanudar" es a nivel
+  de archivo — se descarga siempre a un `.partial` que se descarta si algo
+  falla, nunca se pega a un parcial viejo. Verificado contra el sitio real:
+  3 tomos descargados y con hash verificado, una segunda corrida los
+  reutiliza sin pedir nada, y un `.partial` con basura de una "descarga
+  cortada" simulada se descarta y se vuelve a bajar entero. `spectre csjn
+  download <tomo_id> <destino>`. Ver bitácora PR-17.
 
 - [ ] **PR-18 `[N]` Sonda de calidad**
   Mide caracteres por página y clasifica el tomo en `digital` /
@@ -513,5 +524,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-16 cerrados (04/09/2026).
-Próximo: **PR-17**.
+a PR-17 cerrados (04/09/2026).
+Próximo: **PR-18**.
