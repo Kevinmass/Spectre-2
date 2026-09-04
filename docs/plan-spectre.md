@@ -465,9 +465,25 @@ sin reparsear.
 
 ### Fase 5 — Interfaz (4 PRs)
 
-- [ ] **PR-20 `[N]` Servidor y UI base**
+- [x] **PR-20 `[N]` Servidor y UI base**
   FastAPI sirviendo el estático; layout, navegación, estados vacíos honestos.
   *Acepta:* `spectre serve` levanta y abre el navegador.
+  Hecho: `spectre/api/app.py` — `crear_app()` monta `spectre/web/` (HTML/CSS/JS
+  planos, sin build) con `StaticFiles(html=True)` y expone `GET /api/estado`
+  (tomos con número/estado/calidad + total de chunks), la única fuente de
+  verdad que la UI usa para decidir qué mostrar — sin base o sin datos,
+  devuelve vacío de verdad en vez de fingir. `spectre/web/` — layout con dos
+  tabs (Buscar / Biblioteca) que cambian con JS plano; ambos paneles arrancan
+  con el mensaje honesto que da `/api/estado` ("no hay nada indexado
+  todavía" / "la búsqueda llega en el próximo PR" / lista de tomos o "todavía
+  no cargaste ningún tomo"). `spectre serve [--host] [--port] [--no-browser]`
+  migra la base si hace falta, arma la app y corre `uvicorn.run`; el
+  navegador se abre desde un hook de arranque del lifespan de FastAPI (corre
+  cuando el socket ya está escuchando, sin un `sleep` adivinado). Verificado
+  con `curl` real contra un `spectre serve` levantado en un puerto de prueba
+  (`/`, `/style.css`, `/app.js`, `/api/estado` responden 200) y con
+  `TestClient` real entrando al lifespan (`test_on_startup_corre_una_vez_el_
+  servidor_esta_listo`), no solo con mocks. Ver bitácora PR-20.
 
 - [ ] **PR-21 `[N]` Búsqueda y resultados**
   Campo de consulta, resultados con cita `Fallos: 348:145`, fragmento con el
@@ -557,5 +573,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-18 cerrados (04/09/2026).
-Próximo: **PR-19**.
+a PR-20 cerrados (04/09/2026).
+Próximo: **PR-21**.

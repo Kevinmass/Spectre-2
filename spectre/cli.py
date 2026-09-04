@@ -13,27 +13,24 @@ cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
 hay que reindexar, `probe` embebe un texto con el modelo real), `index`
 (`status` mira los índices vectorial LanceDB y léxico FTS5, `buscar` corre una
 consulta contra el léxico solo), `search` (`buscar` fusiona léxico +
-vectorial por RRF, con filtros de año / tribunal / sección) e `ingest`
+vectorial por RRF, con filtros de año / tribunal / sección), `ingest`
 (corre el pipeline completo — descargar/extraer/limpiar/segmentar/
 estructurar/fragmentar/embeber/indexar — sobre un tomo, por etapa y
-reanudable, y persiste todo en SQLite). El resto existe en `--help` pero
-**revienta si lo invocás** (D-05).
+reanudable, y persiste todo en SQLite) y `serve` (PR-20: levanta el servidor
+FastAPI que sirve `spectre/web/` en localhost y abre el navegador; layout,
+navegación y estados vacíos honestos — buscar y biblioteca todavía no hacen
+nada más que eso, llega en PR-21/PR-23).
 """
 
 from __future__ import annotations
 
 import argparse
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 from spectre import __version__
 from spectre.config import PROJECT_ROOT, get_settings
 from spectre.db import connect, migraciones_disponibles, migrate
-
-# subcomando -> PR que lo implementa
-_PENDIENTES: dict[str, str] = {
-    "serve": "PR-20",
-}
 
 
 def _cmd_config(_args: argparse.Namespace) -> int:
@@ -882,14 +879,28 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         conn.close()
 
 
-def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
-    def _run(_args: argparse.Namespace) -> int:
-        raise SystemExit(
-            f"spectre {nombre}: no implementado todavía (llega en {pr}). "
-            f"El subcomando existe pero no hace nada aún."
-        )
+def _cmd_serve(args: argparse.Namespace) -> int:
+    import webbrowser
 
-    return _run
+    import uvicorn
+
+    from spectre.api import crear_app
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    try:
+        migrate(conn)
+    finally:
+        conn.close()
+
+    url = f"http://{args.host}:{args.port}/"
+    on_startup = None if args.no_browser else (lambda: webbrowser.open(url))
+    app = crear_app(on_startup=on_startup)
+
+    print(f"spectre serve: {url}  (Ctrl+C para cortar)")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1131,9 +1142,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ingest.set_defaults(func=_cmd_ingest)
 
-    for nombre, pr in _PENDIENTES.items():
-        p = sub.add_parser(nombre, help=f"(vacío — {pr})")
-        p.set_defaults(func=_hacer_stub(nombre, pr))
+    p_serve = sub.add_parser(
+        "serve", help="Levanta el servidor local y abre el navegador"
+    )
+    p_serve.add_argument("--host", default="127.0.0.1", help="interfaz de red")
+    p_serve.add_argument("--port", type=int, default=8000, help="puerto TCP")
+    p_serve.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="no abre el navegador automáticamente",
+    )
+    p_serve.set_defaults(func=_cmd_serve)
 
     return parser
 
