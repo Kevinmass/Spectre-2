@@ -570,10 +570,24 @@ sin reparsear.
 
 ### Fase 6 — Cierre del MVP (3 PRs)
 
-- [ ] **PR-24 `[N]` Arranque de un comando**
+- [x] **PR-24 `[N]` Arranque de un comando**
   Script que crea el entorno, instala, baja el modelo y levanta Spectre.
   *Acepta:* en una máquina limpia, del clone a la primera búsqueda sin leer
   documentación.
+  Hecho: `scripts/arrancar.ps1` (Windows) y `scripts/arrancar.sh`
+  (macOS/Linux) crean `.venv` e instalan `.[embed]` (necesitan Python 3.11+
+  ya puesto — eso no lo instala el script); de ahí en más llaman a
+  `scripts/arrancar.py`, que baja el modelo de embeddings real, intenta
+  indexar un Tomo 348 de muestra desde la CSJN para que la primera búsqueda
+  tenga resultados de verdad, y levanta `spectre serve`. **El paso de la
+  CSJN es best-effort**: si el sitio no responde (pasó en esta sesión, no es
+  hipotético — ver "qué verifiqué"), no aborta el arranque; Spectre igual
+  levanta vacío y la Biblioteca (PR-23) deja indexar en cuanto haya red — D-05
+  aplicado al bootstrap, nunca finge que el tomo de muestra quedó indexado si
+  no quedó. Verificado de punta a punta en una copia del repo sin `.venv` ni
+  `data/` (simulando una máquina limpia): el script completo, corrido dos
+  veces, terminó las dos con `spectre serve` real respondiendo en
+  `http://127.0.0.1:8000/`. Ver bitácora PR-24.
 
 - [ ] **PR-25 `[N]` Medición end-to-end**
   Tiempos reales de indexación por tomo, tamaño del índice, memoria pico.
@@ -639,5 +653,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-23 cerrados (04/09/2026).
-Próximo: **PR-24**.
+a PR-24 cerrados (04/09/2026).
+Próximo: **PR-25**.

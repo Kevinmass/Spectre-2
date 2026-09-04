@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-23)
+## Estado del código (al cerrar PR-24)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -70,7 +70,12 @@ la página exacta del fragmento que trajo el resultado, y Biblioteca (PR-23)
 lista los tomos con su progreso (sondeado cada 2s mientras la pestaña está a
 la vista) y tiene los dos formularios —indexar por `csjn_tomo_id` o subir un
 PDF— para lanzar una indexación desde la UI). `spectre serve` levanta ese
-servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
+servidor y abre el navegador. `scripts/arrancar.ps1` (Windows) /
+`scripts/arrancar.sh` (macOS/Linux) — PR-24: crean el venv, instalan
+`.[embed]`, y llaman a `scripts/arrancar.py`, que baja el modelo real,
+intenta indexar un tomo de muestra desde la CSJN (best-effort — si el sitio
+no responde, sigue igual, no aborta) y levanta `spectre serve`. La §9 del
+plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -214,6 +219,15 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     (D-9) o subiendo un PDF a mano — las dos corren el pipeline completo en
     segundo plano (no bloquean el servidor) y el progreso se ve solo, sin
     recargar la página.
+- `scripts/arrancar.ps1` (Windows) / `scripts/arrancar.sh` (macOS/Linux) —
+  PR-24, el arranque de un comando (necesita Python 3.11+ ya instalado, eso
+  no lo instala el script): crean `.venv`, `pip install -e ".[embed]"`, y
+  llaman a `scripts/arrancar.py` (testeado en `tests/test_arrancar.py`), que
+  baja el modelo real, intenta indexar un tomo de muestra desde la CSJN
+  (best-effort: si el sitio no responde, no aborta — Spectre igual levanta
+  vacío) y corre `spectre serve`. La lógica que necesita `spectre` ya
+  importable vive en Python (testeable); los `.ps1`/`.sh` solo hacen lo de
+  antes de eso.
 
 ## Tests
 
