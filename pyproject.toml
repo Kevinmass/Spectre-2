@@ -20,6 +20,12 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
 ]
+# Embeddings locales (PR-12). Arrastra torch: pesado y no hace falta para
+# parsear ni segmentar, así que va aparte. CI no lo instala; para correr
+# `pytest -m slow` de embed o `spectre embed probe`: pip install -e ".[embed]".
+embed = [
+    "sentence-transformers>=3.0",
+]
 
 [project.scripts]
 spectre = "spectre.cli:main"

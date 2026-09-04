@@ -2,6 +2,10 @@
 
 Criterio de aceptación (plan §6): crear la base, insertar un tomo y leerlo;
 test de idempotencia de la migración.
+
+PR-12 agrega el registro del modelo de embedding por chunk
+(`chunks_pendientes_de_embedding`, `marcar_chunks_embebidos`): ver la sección
+"chunks y registro del modelo de embedding".
 """
 
 import sqlite3
@@ -313,6 +317,81 @@ def test_list_fallos_ordena_por_pagina_inicio(repo):
 def test_fallo_sin_tomo_viola_foreign_key(repo):
     with pytest.raises(sqlite3.IntegrityError):
         repo.insert_fallo(999, "huérfano")
+
+
+# --- chunks y registro del modelo de embedding (PR-12) ---------------- #
+
+
+def _fallo_con_chunks(repo, cuantos=3):
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.insert_chunks(
+        fallo_id,
+        [(None, i, f"chunk numero {i}", 1 + i) for i in range(cuantos)],
+    )
+    return fallo_id
+
+
+def test_insert_chunks_y_listar(repo):
+    fallo_id = _fallo_con_chunks(repo, 3)
+    chunks = repo.list_chunks_de_fallo(fallo_id)
+    assert [c.orden for c in chunks] == [0, 1, 2]
+    assert chunks[0].texto == "chunk numero 0"
+    assert chunks[0].pagina_oficial == 1
+    # recién insertados: sin embedding
+    assert all(c.modelo_embedding is None and c.embedding_at is None for c in chunks)
+    assert repo.contar_chunks() == 3
+
+
+def test_chunk_sin_fallo_viola_foreign_key(repo):
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.insert_chunks(999, [(None, 0, "huérfano", None)])
+
+
+def test_chunks_pendientes_son_todos_cuando_nunca_se_embebieron(repo):
+    _fallo_con_chunks(repo, 3)
+    assert len(repo.chunks_pendientes_de_embedding("modelo-a")) == 3
+    assert repo.contar_chunks_pendientes("modelo-a") == 3
+
+
+def test_marcar_embebidos_baja_los_pendientes_y_sella_la_fecha(repo):
+    fallo_id = _fallo_con_chunks(repo, 3)
+    ids = [c.id for c in repo.list_chunks_de_fallo(fallo_id)]
+    tocados = repo.marcar_chunks_embebidos(ids[:2], "modelo-a")
+    assert tocados == 2
+
+    pendientes = repo.chunks_pendientes_de_embedding("modelo-a")
+    assert [c.id for c in pendientes] == [ids[2]]
+    embebido = repo.list_chunks_de_fallo(fallo_id)[0]
+    assert embebido.modelo_embedding == "modelo-a"
+    assert embebido.embedding_at is not None
+
+
+def test_cambiar_de_modelo_vuelve_a_marcar_todo_pendiente(repo):
+    # el criterio de aceptación de PR-12: cambiar el modelo -> el sistema sabe
+    # qué reindexar, sin abrir ningún PDF.
+    fallo_id = _fallo_con_chunks(repo, 3)
+    ids = [c.id for c in repo.list_chunks_de_fallo(fallo_id)]
+    repo.marcar_chunks_embebidos(ids, "modelo-viejo")
+    assert repo.chunks_pendientes_de_embedding("modelo-viejo") == []
+
+    # config apunta ahora a otro modelo:
+    pendientes = repo.chunks_pendientes_de_embedding("modelo-nuevo")
+    assert [c.id for c in pendientes] == ids
+    assert repo.contar_chunks_pendientes("modelo-nuevo") == 3
+
+
+def test_chunks_pendientes_respeta_el_limite(repo):
+    _fallo_con_chunks(repo, 5)
+    assert len(repo.chunks_pendientes_de_embedding("m", limite=2)) == 2
+
+
+def test_borrar_tomo_arrastra_los_chunks(repo, conn):
+    fallo_id = _fallo_con_chunks(repo, 2)
+    tomo_id = repo.get_fallo(fallo_id).tomo_id
+    conn.execute("DELETE FROM tomos WHERE id = ?", (tomo_id,))
+    conn.commit()
+    assert repo.contar_chunks() == 0
 
 
 # --- conexión ------------------------------------------------------------ #

@@ -1,6 +1,7 @@
 """Acceso a datos de Spectre. Todo pasa por `repo`."""
 
 from spectre.db.repo import (
+    Chunk,
     Fallo,
     Pagina,
     Repo,
@@ -12,6 +13,7 @@ from spectre.db.repo import (
 )
 
 __all__ = [
+    "Chunk",
     "Fallo",
     "Pagina",
     "Repo",
