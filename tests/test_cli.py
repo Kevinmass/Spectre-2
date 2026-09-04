@@ -100,6 +100,15 @@ def test_pdf_clean_muestra_una_pagina(capsys):
     assert not out.splitlines()[-1].startswith("DE JUSTICIA")
 
 
+def test_pdf_quality_clasifica_digital(capsys):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_p1-16.pdf"
+    assert main(["pdf", "quality", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "calidad" in out
+    assert "digital" in out
+    assert "caracteres/página" in out
+
+
 def test_pdf_index_cuenta_caratulas(capsys):
     fixture = Path(__file__).parent / "fixtures" / "tomo348_indice.pdf"
     assert main(["pdf", "index", str(fixture)]) == 0

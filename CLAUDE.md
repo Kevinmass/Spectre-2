@@ -17,22 +17,25 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-17)
+## Estado del código (al cerrar PR-18)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
-`get_chunk` y `filtrar_chunks`), `spectre/jobs/runner.py`, `spectre/corpus/pdf/`
-(`extract` + `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` +
-`structure` + `sections` + `citations`), `spectre/corpus/csjn/` (`catalog`:
-lista los tomos del sitio oficial — número, volumen, año, id CSJN — sin
-persistir; `download`: baja el PDF de un tomo con reintentos y caché por
-archivo, sin resume por Range —el servidor lo ignora—, así que "reanudar" es
-a nivel de archivo completo), `spectre/chunking/` (`chunker`: ventanas de ~400
-palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
-`local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
-`[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
-`data/vectors/`; `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la
-propia base SQLite, sincronizada sola por triggers), `spectre/search/`
+`get_chunk` y `filtrar_chunks`; `tomos.calidad` ya está en el esquema desde
+`0001_initial.sql`, pero todavía no la llena nadie), `spectre/jobs/runner.py`,
+`spectre/corpus/pdf/` (`extract` + `clean` + `quality`: clasifica un tomo en
+`digital` / `requiere_ocr` según caracteres por página), `spectre/corpus/fallo/`
+(`index_parser` + `segmenter` + `structure` + `sections` + `citations`),
+`spectre/corpus/csjn/` (`catalog`: lista los tomos del sitio oficial — número,
+volumen, año, id CSJN — sin persistir; `download`: baja el PDF de un tomo con
+reintentos y caché por archivo, sin resume por Range —el servidor lo ignora—,
+así que "reanudar" es a nivel de archivo completo), `spectre/chunking/`
+(`chunker`: ventanas de ~400 palabras por sección), `spectre/embed/`
+(`base.EmbeddingModel` + `local_st.ModeloLocalST`, sentence-transformers
+detrás del extra opcional `[embed]`), `spectre/index/`
+(`vectors.IndiceVectorial`, LanceDB embebido en `data/vectors/`;
+`lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
+SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
 tribunal / tipo de sección). El resto del árbol de la §4 del plan (`api/`,
 `web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
@@ -120,6 +123,8 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
     (encabezados, des-hifenado, versalitas) y mide la reducción de palabras.
+  - `spectre pdf quality <pdf>` — mide caracteres por página y clasifica el
+    tomo en `digital` / `requiere_ocr` (D-10; PR-18).
   - `spectre pdf index <pdf> [--muestra N]` — parsea el índice por nombres de
     las partes y cuenta carátulas → página (PR-06).
   - `spectre pdf segment <pdf> [--tomo N] [--muestra N]` — arma los fallos del
