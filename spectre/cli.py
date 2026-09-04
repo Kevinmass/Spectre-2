@@ -1,6 +1,6 @@
 """CLI de Spectre.
 
-Estado PR-18: subcomandos reales `config` (rutas resueltas), `db`
+Estado PR-19: subcomandos reales `config` (rutas resueltas), `db`
 (migraciones), `csjn` (`catalog` lista los tomos del sitio oficial: número,
 volumen, año, id CSJN; `download` baja el PDF de un tomo con reintentos y
 caché), `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de
@@ -12,9 +12,12 @@ con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
 hay que reindexar, `probe` embebe un texto con el modelo real), `index`
 (`status` mira los índices vectorial LanceDB y léxico FTS5, `buscar` corre una
-consulta contra el léxico solo) y `search` (`buscar` fusiona léxico +
-vectorial por RRF, con filtros de año / tribunal / sección). El resto existe
-en `--help` pero **revienta si lo invocás** (D-05).
+consulta contra el léxico solo), `search` (`buscar` fusiona léxico +
+vectorial por RRF, con filtros de año / tribunal / sección) e `ingest`
+(corre el pipeline completo — descargar/extraer/limpiar/segmentar/
+estructurar/fragmentar/embeber/indexar — sobre un tomo, por etapa y
+reanudable, y persiste todo en SQLite). El resto existe en `--help` pero
+**revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -29,7 +32,6 @@ from spectre.db import connect, migraciones_disponibles, migrate
 
 # subcomando -> PR que lo implementa
 _PENDIENTES: dict[str, str] = {
-    "ingest": "PR-19",
     "serve": "PR-20",
 }
 
@@ -822,6 +824,64 @@ def _cmd_csjn_download(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ingest(args: argparse.Namespace) -> int:
+    from spectre.db import Repo
+    from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    try:
+        migrate(conn)
+        repo = Repo(conn)
+        tomo_id = iniciar_tomo(
+            repo,
+            numero=args.numero,
+            pdf_path=args.pdf,
+            csjn_tomo_id=args.csjn_tomo_id,
+        )
+        resultado = correr_pipeline(conn, [tomo_id])
+        tomo = resultado[tomo_id]
+        hechas, total = progreso(tomo)
+
+        filas = [
+            ("tomo", tomo.numero),
+            ("estado", tomo.estado),
+            ("calidad", tomo.calidad),
+            ("etapas", f"{hechas}/{total}"),
+        ]
+        if tomo.estado == "indexado":
+            filas += [
+                ("fallos", len(repo.list_fallos(tomo_id))),
+                ("chunks", len(repo.list_chunks_de_tomo(tomo_id))),
+            ]
+        ancho = max(len(k) for k, _ in filas)
+        for k, v in filas:
+            print(f"{k.ljust(ancho)}  {v}")
+
+        if tomo.estado == "extraido" and tomo.calidad == "requiere_ocr":
+            print(
+                "\nrequiere OCR (D-10): no se sigue procesando: queda en la "
+                "cola visible (tomos con calidad='requiere_ocr')."
+            )
+            return 0
+
+        pendiente = siguiente_etapa(tomo)
+        if pendiente is not None:
+            # No terminó y no está frenado por calidad: alguna etapa falló.
+            etapa, _ = pendiente
+            fila = conn.execute(
+                "SELECT error FROM jobs WHERE tipo = ? AND estado = 'fallido'"
+                " ORDER BY id DESC LIMIT 1",
+                (f"pipeline.{etapa}",),
+            ).fetchone()
+            detalle = fila["error"] if fila else "sin detalle (revisá `jobs`)"
+            raise SystemExit(f"se frenó en la etapa '{etapa}': {detalle}")
+        return 0
+    finally:
+        conn.close()
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -1057,6 +1117,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="no embebe la consulta: solo busca en el índice léxico",
     )
     p_search_buscar.set_defaults(func=_cmd_search_buscar)
+
+    p_ingest = sub.add_parser(
+        "ingest",
+        help="Corre el pipeline completo sobre un tomo (descargar..indexar)",
+    )
+    p_ingest.add_argument("numero", type=int, help="número de tomo")
+    p_ingest.add_argument(
+        "--pdf", help="ruta a un PDF ya en disco (subida manual, D-9)"
+    )
+    p_ingest.add_argument(
+        "--csjn-tomo-id", help="id de la CSJN para descargarlo (lo da `csjn catalog`)"
+    )
+    p_ingest.set_defaults(func=_cmd_ingest)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

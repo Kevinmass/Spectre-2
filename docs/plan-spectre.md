@@ -437,11 +437,31 @@ sin reparsear.
   un tomo real en cuanto haya red. `spectre pdf quality <pdf>`. Ver bitácora
   PR-18.
 
-- [ ] **PR-19 `[N]` Pipeline completo como job**
+- [x] **PR-19 `[N]` Pipeline completo como job**
   descargar → extraer → limpiar → segmentar → estructurar → fragmentar →
   embeber → indexar, reanudable por etapa, con progreso consultable.
   *Acepta:* correr el pipeline sobre 2 tomos, cortarlo a la mitad, reanudarlo y
   terminar con el mismo resultado que una corrida limpia.
+  Hecho: `spectre/jobs/pipeline.py` — un job **por etapa por tomo**
+  (`pipeline.descargar` ... `pipeline.indexar`, tipo `f"pipeline.{etapa}"`),
+  encadenados por `correr_pipeline` (fuera de los handlers: el runner prohíbe
+  que un handler commitee, así que el encolado del siguiente job no puede
+  vivir adentro del anterior). El progreso consultable es `tomos.estado`
+  (vocabulario congelado en `0004_tomos_estado_check.sql`, el CHECK que la
+  migración 0001 dejó pendiente para este PR); un tomo `requiere_ocr` (PR-18)
+  se frena después de `extraer`, sin inventar un estado nuevo (D-10). Los
+  handlers escriben con `Repo(conn, auto_commit=False)` — cambio nuevo en
+  `db/repo.py`: `Repo` ahora acepta `auto_commit` (default `True`, no rompe
+  nada existente) para respetar el contrato del runner. `spectre ingest
+  <numero> [--pdf | --csjn-tomo-id]`. **Verificado con handlers reales** sobre
+  el fixture `tomo348_cuerpo_p31-40.pdf` (3 fallos, uno con voto concurrente)
+  y **con handlers falsos** sobre varios tomos (bloqueo por `requiere_ocr`,
+  por etapa fallida, y la reanudación en sí): cortar la corrida a la mitad
+  —reclamar un job y no correrlo, simulando el proceso muerto— y reanudarla da
+  exactamente el mismo resultado (fallos, secciones, chunks, estado) que una
+  corrida limpia sobre una base aparte. La medición sobre el Tomo 348/349
+  completos (con el modelo de embeddings real) no corrió esta sesión — ver
+  bitácora. Ver bitácora PR-19.
 
 ### Fase 5 — Interfaz (4 PRs)
 

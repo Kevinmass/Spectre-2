@@ -365,7 +365,56 @@ def test_csjn_sin_accion_es_error():
     assert exc.value.code != 0
 
 
-@pytest.mark.parametrize("cmd", ["ingest", "serve"])
+# --- ingest (PR-19) ------------------------------------------------------- #
+
+
+@pytest.fixture
+def _modelo_falso_cli(monkeypatch):
+    """`ingest` corre la etapa `embeber` de verdad; un modelo falso evita
+    depender de `[embed]` (torch) para probar el CLI."""
+    from spectre.embed.base import EmbeddingModel
+
+    class _Falso(EmbeddingModel):
+        nombre = "falso-cli"
+        dimension = 4
+
+        def embed(self, textos):
+            return [[1.0, 0.0, 0.0, 0.0] for _ in textos]
+
+    import spectre.embed as embed_pkg
+
+    monkeypatch.setattr(embed_pkg, "cargar_modelo", lambda nombre=None: _Falso())
+
+
+def test_ingest_pdf_local_corre_las_ocho_etapas(capsys, datos_tmp, _modelo_falso_cli):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert main(["ingest", "348", "--pdf", str(fixture)]) == 0
+    out = capsys.readouterr().out
+    assert "estado   indexado" in out
+    assert "etapas   8/8" in out
+    assert "fallos   3" in out
+    assert "chunks" in out
+
+
+def test_ingest_es_reanudable_sin_reprocesar(capsys, datos_tmp, _modelo_falso_cli):
+    fixture = Path(__file__).parent / "fixtures" / "tomo348_cuerpo_p31-40.pdf"
+    assert main(["ingest", "348", "--pdf", str(fixture)]) == 0
+    capsys.readouterr()
+    assert main(["ingest", "348"]) == 0  # sin --pdf: ya lo tiene guardado
+    out = capsys.readouterr().out
+    assert "estado   indexado" in out
+
+
+def test_ingest_sin_pdf_ni_csjn_id_revienta_en_descargar(capsys, datos_tmp):
+    with pytest.raises(SystemExit) as exc:
+        main(["ingest", "999"])
+    assert "descargar" in str(exc.value)
+    assert "csjn_tomo_id" in str(exc.value)
+    out = capsys.readouterr().out
+    assert "estado   registrado" in out  # no avanzó ni una etapa
+
+
+@pytest.mark.parametrize("cmd", ["serve"])
 def test_subcomandos_vacios_fallan_ruidosamente(cmd):
     # Ningún stub que reporte éxito (D-05).
     with pytest.raises(SystemExit) as exc:
