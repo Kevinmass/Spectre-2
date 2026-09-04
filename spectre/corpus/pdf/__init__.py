@@ -14,9 +14,11 @@ from spectre.corpus.pdf.extract import (
     extraer_texto,
     persistir,
 )
+from spectre.corpus.pdf.quality import ResultadoCalidad, medir_calidad
 
 __all__ = [
     "PaginaTexto",
+    "ResultadoCalidad",
     "ResultadoOffset",
     "calcular_offset",
     "contar_palabras",
@@ -25,5 +27,6 @@ __all__ = [
     "extraer_texto",
     "limpiar",
     "limpiar_tomo",
+    "medir_calidad",
     "persistir",
 ]

@@ -1,11 +1,12 @@
 """CLI de Spectre.
 
-Estado PR-17: subcomandos reales `config` (rutas resueltas), `db`
+Estado PR-18: subcomandos reales `config` (rutas resueltas), `db`
 (migraciones), `csjn` (`catalog` lista los tomos del sitio oficial: número,
 volumen, año, id CSJN; `download` baja el PDF de un tomo con reintentos y
 caché), `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de
-texto, `index` parsea el índice por nombres de las partes, `segment` arma los
-fallos con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
+texto, `quality` mide caracteres por página y clasifica digital/requiere_ocr,
+`index` parsea el índice por nombres de las partes, `segment` arma los fallos
+con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 `sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
 `citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
 cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
@@ -147,6 +148,24 @@ def _cmd_pdf_clean(args: argparse.Namespace) -> int:
         if elegida is None:
             raise SystemExit(f"el PDF no tiene pdf_page {args.muestra}")
         print(f"\n--- pdf_page {args.muestra} limpia ---\n{limpiar(elegida.texto)}")
+    return 0
+
+
+def _cmd_pdf_quality(args: argparse.Namespace) -> int:
+    from spectre.corpus.pdf import extraer_texto, medir_calidad
+
+    paginas = extraer_texto(args.pdf)
+    r = medir_calidad(paginas)
+    filas = [
+        ("pdf", args.pdf),
+        ("calidad", r.calidad),
+        ("páginas", r.total),
+        ("con texto", f"{r.con_texto}  ({r.cobertura:.1%})"),
+        ("caracteres/página", f"{r.caracteres_por_pagina:.0f}"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
     return 0
 
 
@@ -880,6 +899,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--muestra", type=int, metavar="PDF_PAGE", help="imprime esa página ya limpia"
     )
     p_pdf_clean.set_defaults(func=_cmd_pdf_clean)
+
+    p_pdf_quality = pdf_sub.add_parser(
+        "quality",
+        help="Mide caracteres por página y clasifica el tomo digital/requiere_ocr",
+    )
+    p_pdf_quality.add_argument("pdf", help="ruta al PDF del tomo")
+    p_pdf_quality.set_defaults(func=_cmd_pdf_quality)
 
     p_pdf_index = pdf_sub.add_parser(
         "index",

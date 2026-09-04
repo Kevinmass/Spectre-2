@@ -418,11 +418,24 @@ sin reparsear.
   cortada" simulada se descarta y se vuelve a bajar entero. `spectre csjn
   download <tomo_id> <destino>`. Ver bitácora PR-17.
 
-- [ ] **PR-18 `[N]` Sonda de calidad**
+- [x] **PR-18 `[N]` Sonda de calidad**
   Mide caracteres por página y clasifica el tomo en `digital` /
   `requiere_ocr`.
   *Acepta:* el Tomo 348 clasifica `digital`; un tomo anterior a 1950 clasifica
   `requiere_ocr` y **no** se indexa como si estuviera vacío.
+  Hecho: `spectre/corpus/pdf/quality.py` — `medir_calidad()` clasifica según
+  qué fracción de páginas supera un umbral de caracteres extraídos (200
+  caracteres, calibrado sobre el Tomo 348 real: mediana 2.335
+  caracteres/página, solo 0,6% de páginas por debajo del umbral). **Mitad del
+  criterio medida de verdad**: Tomo 348 (968 páginas) → `digital`, 99,4% de
+  cobertura; Tomo 349 → `digital`, 99,3%. **La otra mitad no se pudo medir
+  esta sesión**: sin acceso de red a `sjservicios.csjn.gov.ar` (timeout
+  confirmado a nivel TCP) no hay forma de bajar un tomo real anterior a 1950
+  para probar el caso `requiere_ocr` contra un escaneo genuino; se prueba con
+  datos fabricados que reproducen la forma de un escaneo sin OCR (texto vacío
+  en casi todas las páginas). No se fuerza el número — pendiente repetir con
+  un tomo real en cuanto haya red. `spectre pdf quality <pdf>`. Ver bitácora
+  PR-18.
 
 - [ ] **PR-19 `[N]` Pipeline completo como job**
   descargar → extraer → limpiar → segmentar → estructurar → fragmentar →
@@ -524,5 +537,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-17 cerrados (04/09/2026).
-Próximo: **PR-18**.
+a PR-18 cerrados (04/09/2026).
+Próximo: **PR-19**.
