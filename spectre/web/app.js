@@ -7,6 +7,12 @@ const ETIQUETAS_SECCION = {
   dictamen: "Dictamen",
 };
 
+// Sondea `/api/estado` cada 2s mientras la pestaña Biblioteca está a la
+// vista, para que el progreso de una indexación en curso (PR-23) se vea
+// avanzar solo. Se corta al salir de la pestaña: nadie necesita seguir
+// pidiéndolo mientras mira otra cosa.
+let intervaloBiblioteca = null;
+
 function activarTab(nombre) {
   for (const boton of document.querySelectorAll(".tab")) {
     boton.setAttribute("aria-current", String(boton.dataset.tab === nombre));
@@ -14,6 +20,35 @@ function activarTab(nombre) {
   for (const panel of document.querySelectorAll(".panel")) {
     panel.hidden = panel.id !== `tab-${nombre}`;
   }
+
+  if (intervaloBiblioteca !== null) {
+    clearInterval(intervaloBiblioteca);
+    intervaloBiblioteca = null;
+  }
+  if (nombre === "biblioteca") {
+    intervaloBiblioteca = setInterval(cargarEstado, 2000);
+  }
+}
+
+function renderProgresoTomo(tomo) {
+  const contenedor = document.createElement("div");
+
+  const texto = document.createElement("span");
+  texto.textContent = `${tomo.etapas_hechas}/${tomo.etapas_total}`;
+  contenedor.appendChild(texto);
+
+  if (tomo.calidad === "requiere_ocr") {
+    const nota = document.createElement("p");
+    nota.className = "vacio progreso-nota";
+    nota.textContent = "Requiere OCR: no se sigue procesando (D-10).";
+    contenedor.appendChild(nota);
+  } else if (tomo.error) {
+    const error = document.createElement("p");
+    error.className = "progreso-error";
+    error.textContent = `Falló en "${tomo.error.etapa}": ${tomo.error.mensaje}`;
+    contenedor.appendChild(error);
+  }
+  return contenedor;
 }
 
 function pintarBiblioteca(estado) {
@@ -37,6 +72,9 @@ function pintarBiblioteca(estado) {
       td.textContent = valor;
       tr.appendChild(td);
     }
+    const tdProgreso = document.createElement("td");
+    tdProgreso.appendChild(renderProgresoTomo(tomo));
+    tr.appendChild(tdProgreso);
     filas.appendChild(tr);
   }
 }
@@ -339,6 +377,62 @@ async function mostrarFallo(cita, paginaOficial) {
   }
 }
 
+// --- biblioteca: indexar / subir (PR-23) -------------------------------- //
+
+async function _detalleDeError(resp) {
+  const cuerpo = await resp.json().catch(() => ({}));
+  return cuerpo.detail || `${resp.status} ${resp.statusText}`;
+}
+
+async function indexarDesdeCsjn(numero, csjnTomoId, boton) {
+  const aviso = document.getElementById("biblioteca-aviso");
+  aviso.hidden = false;
+  aviso.textContent = `Registrando el tomo ${numero}…`;
+  boton.disabled = true;
+  try {
+    const resp = await fetch(`/api/tomos/${numero}/indexar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csjn_tomo_id: csjnTomoId || null }),
+    });
+    if (!resp.ok) {
+      throw new Error(await _detalleDeError(resp));
+    }
+    aviso.textContent =
+      `Tomo ${numero}: indexación iniciada. El progreso se actualiza solo ` +
+      "acá abajo.";
+    cargarEstado();
+  } catch (err) {
+    aviso.textContent = `No se pudo iniciar la indexación (${err.message}).`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+async function subirPdf(numero, archivo, boton) {
+  const aviso = document.getElementById("biblioteca-aviso");
+  aviso.hidden = false;
+  aviso.textContent = `Subiendo el PDF del tomo ${numero}…`;
+  boton.disabled = true;
+  try {
+    const datos = new FormData();
+    datos.append("archivo", archivo);
+    const resp = await fetch(`/api/tomos/${numero}/subir`, {
+      method: "POST",
+      body: datos,
+    });
+    if (!resp.ok) {
+      throw new Error(await _detalleDeError(resp));
+    }
+    aviso.textContent = `Tomo ${numero}: PDF subido, indexación iniciada.`;
+    cargarEstado();
+  } catch (err) {
+    aviso.textContent = `No se pudo subir el PDF (${err.message}).`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 for (const boton of document.querySelectorAll(".tab")) {
   boton.addEventListener("click", () => activarTab(boton.dataset.tab));
 }
@@ -353,6 +447,25 @@ document.getElementById("form-buscar").addEventListener("submit", (ev) => {
 
 document.getElementById("volver-resultados").addEventListener("click", () => {
   activarTab("buscar");
+});
+
+document.getElementById("form-indexar-csjn").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const numero = form.elements.numero.value;
+  const csjnTomoId = form.elements.csjn_tomo_id.value.trim();
+  indexarDesdeCsjn(numero, csjnTomoId, form.querySelector("button"));
+});
+
+document.getElementById("form-subir-pdf").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const numero = form.elements.numero.value;
+  const archivo = form.elements.archivo.files[0];
+  if (!archivo) {
+    return;
+  }
+  subirPdf(numero, archivo, form.querySelector("button"));
 });
 
 cargarEstado();

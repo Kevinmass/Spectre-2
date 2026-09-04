@@ -19,6 +19,9 @@ dependencies = [
     # Servidor de la interfaz (D-11, PR-20). Un solo proceso, sin Docker.
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    # Subida manual de PDFs desde la Biblioteca (D-9, PR-23): FastAPI necesita
+    # este paquete para parsear formularios multipart (`UploadFile`).
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
