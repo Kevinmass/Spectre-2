@@ -13,6 +13,9 @@ authors = [{ name = "Kevin" }]
 dependencies = [
     "pydantic-settings>=2.4",
     "pdfplumber>=0.11",
+    # Índice vectorial embebido (D-5). Arrastra pyarrow + numpy, no torch:
+    # moderado y es el almacenamiento elegido, así que va como dep dura.
+    "lancedb>=0.13,<1.0",
 ]
 
 [project.optional-dependencies]

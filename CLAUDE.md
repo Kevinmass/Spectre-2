@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-12)
+## Estado del código (al cerrar PR-13)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; el repo ya maneja chunks y el registro del modelo de embedding),
@@ -26,9 +26,10 @@ migraciones; el repo ya maneja chunks y el registro del modelo de embedding),
 `sections` + `citations`), `spectre/chunking/` (`chunker`: ventanas de ~400
 palabras por sección), `spectre/embed/` (`base.EmbeddingModel` +
 `local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
-`[embed]`). El resto del árbol de la §4 del plan (`index/`, `search/`, `api/`,
-`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
-próximo PR.
+`[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
+`data/vectors/`). El resto del árbol de la §4 del plan (`index/lexical`,
+`search/`, `api/`, `web/`) es objetivo: todavía no hay código. La §9 del plan
+dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -66,8 +67,9 @@ próximo PR.
   transaccional; un handler que commitea rompe la garantía "sin duplicar" (D-3).
 - **Regla de dependencias:** `corpus/` no importa `index/` ni `embed/`.
   `search/` no importa `corpus/`. `chunking/` consume `corpus/fallo` (secciones
-  + texto por página) pero no importa `embed/` ni `index/`. Todo cruce con la
-  base pasa por `db/repo.py`.
+  + texto por página) pero no importa `embed/` ni `index/`. `index/` recibe
+  vectores / texto ya listos y no importa `corpus/`. Todo cruce con la base
+  pasa por `db/repo.py`.
 - El modelo de embeddings va detrás de `embed/base.py` y **se registra por
   chunk** (`chunks.modelo_embedding`), para saber qué reindexar si cambia.
 - El parseo y el embedding están separados: texto limpio y chunks viven en
@@ -81,7 +83,9 @@ Todo corre en el venv del repo. En esta máquina (Windows) no hay Python 3.11
 instalado: el `.venv` es 3.13 y **CI valida contra 3.11** (`.github/workflows/ci.yml`).
 Rutas del venv: `./.venv/Scripts/python.exe`, `./.venv/Scripts/ruff.exe`.
 
-`sentence-transformers` (PR-12, embeddings reales) es el extra opcional
+`lancedb` (PR-13, índice vectorial) es dependencia **dura**: `pip install -e
+".[dev]"` la trae (arrastra pyarrow + numpy, no torch) y CI la ejercita.
+`sentence-transformers` (PR-12, embeddings reales) es el extra **opcional**
 `[embed]` — arrastra torch, CI **no** lo instala y el `.venv` tampoco lo tiene.
 Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
 
@@ -117,6 +121,8 @@ Para el modelo real / los tests `slow` de embed: `pip install -e ".[embed]"`.
     están pendientes de (re)embedding con ese modelo (criterio de PR-12).
     `spectre embed probe "<texto>" [--modelo M]` — carga el modelo real y embebe
     (necesita el extra `[embed]`; sin él, revienta claro).
+  - `spectre index status` — vectores en el índice LanceDB (`data/vectors/`),
+    por modelo, y cuántos chunks de SQLite faltan indexar (PR-13).
   - `spectre ingest` / `serve` — declarados pero revientan (los implementan
     PR-19 / PR-20). Ningún stub que reporte éxito.
 
