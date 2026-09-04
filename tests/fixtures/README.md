@@ -100,6 +100,28 @@ with open("tests/fixtures/tomo348_cuerpo_p31-40.pdf", "wb") as f:
     w.write(f)
 ```
 
+## `csjn_catalogo_p1.html`
+
+Recorte real de `https://sjservicios.csjn.gov.ar/sj/tomosFallos.do` (página 1
+de 5, fetched 04/09/2026): 5 filas del catálogo de tomos, incluido el par
+`347-I`/`347-II` (dos volúmenes distintos del mismo número de tomo, el
+hallazgo del spike de PR-16) y el pie de paginación ("Página 1 de 5"). Prueba
+`spectre.corpus.csjn.catalog.parsear_pagina` sin pegarle al sitio real. El
+criterio de aceptación completo (los 349 números, contiguos) es
+`test_catalog.py::test_listar_catalogo_real`, marca `red` (pega contra el
+sitio real; `pytest -m red`).
+
+Regenerar (no hay PDF de por medio, es HTML):
+
+```bash
+curl -s -A "Mozilla/5.0" -X POST -d "desdePagina=1" \
+  "https://sjservicios.csjn.gov.ar/sj/tomosFallos" -o /tmp/pagina1.html
+```
+
+y recortar a mano las filas que interesen + el pie `P&aacute;gina&nbsp;
+<span>N</span> de <span>M</span>` (necesario: `parsear_pagina` revienta sin
+él).
+
 ## Tomos completos (no versionados)
 
 `data/tomos/348.pdf` y `data/tomos/349.pdf` (Fallos, tomos 348 y 349). Los usan
