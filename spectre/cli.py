@@ -1,6 +1,6 @@
 """CLI de Spectre.
 
-Estado PR-12: subcomandos reales `config` (rutas resueltas), `db` (migraciones),
+Estado PR-14: subcomandos reales `config` (rutas resueltas), `db` (migraciones),
 `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza de texto,
 `index` parsea el índice por nombres de las partes, `segment` arma los fallos
 con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
@@ -8,8 +8,9 @@ con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 `citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
 cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
 hay que reindexar, `probe` embebe un texto con el modelo real) e `index`
-(`status` mira el índice vectorial LanceDB). El resto existe en `--help` pero
-**revienta si lo invocás** (D-05).
+(`status` mira los índices vectorial LanceDB y léxico FTS5, `buscar` corre una
+consulta contra el léxico). El resto existe en `--help` pero **revienta si lo
+invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -626,7 +627,7 @@ def _cmd_embed_probe(args: argparse.Namespace) -> int:
 
 def _cmd_index_status(_args: argparse.Namespace) -> int:
     from spectre.db import Repo, connect
-    from spectre.index import IndiceVectorial
+    from spectre.index import IndiceLexico, IndiceVectorial
 
     s = get_settings()
     idx = IndiceVectorial(s.vectors_dir)
@@ -649,12 +650,14 @@ def _cmd_index_status(_args: argparse.Namespace) -> int:
             repo = Repo(conn)
             total_chunks = repo.contar_chunks()
             pendientes = repo.contar_chunks_pendientes(s.embedding_model)
+            total_fts = IndiceLexico(conn).contar()
         finally:
             conn.close()
         filas += [
             ("chunks en SQLite", total_chunks),
             ("chunks sin embedding", f"{pendientes}  (modelo {s.embedding_model})"),
             ("chunks en el índice vectorial", len(idx.ids())),
+            ("chunks en el índice léxico (FTS5)", total_fts),
         ]
     else:
         filas.append(("base", f"{s.db_path}  (no existe — corré `spectre db migrate`)"))
@@ -662,6 +665,34 @@ def _cmd_index_status(_args: argparse.Namespace) -> int:
     ancho = max(len(k) for k, _ in filas)
     for k, v in filas:
         print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
+def _cmd_index_buscar(args: argparse.Namespace) -> int:
+    from spectre.db import Repo, connect
+    from spectre.index import IndiceLexico
+
+    s = get_settings()
+    if not s.db_path.exists():
+        raise SystemExit(
+            f"la base no existe todavía ({s.db_path}) — corré `spectre db migrate`"
+        )
+
+    conn = connect(s.db_path)
+    try:
+        resultados = IndiceLexico(conn).buscar(args.consulta, k=args.k)
+        repo = Repo(conn)
+        print(f"consulta: {args.consulta!r}  ({len(resultados)} resultados)\n")
+        for r in resultados:
+            chunk = repo.get_chunk(r.chunk_id)
+            fallo = repo.get_fallo(chunk.fallo_id) if chunk else None
+            cita = fallo.cita if fallo else "?"
+            caratula = fallo.caratula if fallo else "?"
+            extracto = " ".join(chunk.texto.split())[:120] if chunk else ""
+            print(f"  [rank {r.rank:+.3f}]  Fallos: {cita}  {caratula}")
+            print(f"    {extracto}...")
+    finally:
+        conn.close()
     return 0
 
 
@@ -816,14 +847,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_embed_probe.set_defaults(func=_cmd_embed_probe)
 
-    p_index = sub.add_parser("index", help="Índice vectorial: estado")
+    p_index = sub.add_parser(
+        "index", help="Índices vectorial y léxico: estado y búsqueda"
+    )
     index_sub = p_index.add_subparsers(
         dest="index_command", required=True, metavar="<acción>"
     )
     p_index_status = index_sub.add_parser(
-        "status", help="Vectores en el índice y chunks que faltan indexar"
+        "status", help="Vectores/chunks en cada índice y qué falta indexar"
     )
     p_index_status.set_defaults(func=_cmd_index_status)
+    p_index_buscar = index_sub.add_parser(
+        "buscar", help="Busca una consulta en el índice léxico (FTS5)"
+    )
+    p_index_buscar.add_argument("consulta", help="texto a buscar")
+    p_index_buscar.add_argument(
+        "--k", type=int, default=10, metavar="N", help="cuántos resultados traer"
+    )
+    p_index_buscar.set_defaults(func=_cmd_index_buscar)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")

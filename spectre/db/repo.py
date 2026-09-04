@@ -185,6 +185,10 @@ def _fallo(row: sqlite3.Row | None) -> Fallo | None:
     return Fallo(**row) if row is not None else None
 
 
+def _chunk(row: sqlite3.Row | None) -> Chunk | None:
+    return Chunk(**row) if row is not None else None
+
+
 # --------------------------------------------------------------------------- #
 # Repositorio
 # --------------------------------------------------------------------------- #
@@ -426,6 +430,13 @@ class Repo:
         )
         self.conn.commit()
         return len(datos)
+
+    def get_chunk(self, chunk_id: int) -> Chunk | None:
+        return _chunk(
+            self.conn.execute(
+                "SELECT * FROM chunks WHERE id = ?", (chunk_id,)
+            ).fetchone()
+        )
 
     def list_chunks_de_fallo(self, fallo_id: int) -> list[Chunk]:
         return [

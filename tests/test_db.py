@@ -5,7 +5,11 @@ test de idempotencia de la migración.
 
 PR-12 agrega el registro del modelo de embedding por chunk
 (`chunks_pendientes_de_embedding`, `marcar_chunks_embebidos`): ver la sección
-"chunks y registro del modelo de embedding".
+"chunks y registro del modelo de embedding". PR-14 agrega la migración
+`0003_chunks_fts` (FTS5 sobre `chunks.texto`, ver "índice léxico (FTS5,
+PR-14)"); el comportamiento de búsqueda en sí se prueba en `test_lexical.py`,
+acá solo que la migración deja el esquema (tabla + triggers) en su lugar y
+sincronizado.
 """
 
 import sqlite3
@@ -45,7 +49,7 @@ def _dump_esquema(conn):
 # --- migraciones -------------------------------------------------------- #
 
 
-MIGRACIONES = ["0001_initial", "0002_jobs_estado_check"]
+MIGRACIONES = ["0001_initial", "0002_jobs_estado_check", "0003_chunks_fts"]
 
 
 def test_migrate_crea_el_esquema_completo(conn):
@@ -59,6 +63,7 @@ def test_migrate_crea_el_esquema_completo(conn):
         "chunks",
         "citas",
         "jobs",
+        "chunks_fts",
         "_migraciones",
     }
     assert esperadas <= _tablas(conn)
