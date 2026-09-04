@@ -333,6 +333,23 @@ def test_csjn_catalog_muestra_filas(capsys):
     assert "tomoId=" in out
 
 
+# --- csjn download (PR-17) ----------------------------------------------- #
+
+
+@pytest.mark.red
+def test_csjn_download_baja_y_despues_usa_cache(capsys, tmp_path):
+    destino = tmp_path / "349.pdf"
+
+    assert main(["csjn", "download", "447", str(destino)]) == 0
+    out = capsys.readouterr().out
+    assert "sha256" in out
+    assert "no (se descargó ahora)" in out
+    assert destino.is_file()
+
+    assert main(["csjn", "download", "447", str(destino)]) == 0
+    assert "sí" in capsys.readouterr().out
+
+
 def test_csjn_sin_accion_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["csjn"])
