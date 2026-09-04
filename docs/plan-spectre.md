@@ -485,11 +485,33 @@ sin reparsear.
   `TestClient` real entrando al lifespan (`test_on_startup_corre_una_vez_el_
   servidor_esta_listo`), no solo con mocks. Ver bitácora PR-20.
 
-- [ ] **PR-21 `[N]` Búsqueda y resultados**
+- [x] **PR-21 `[N]` Búsqueda y resultados**
   Campo de consulta, resultados con cita `Fallos: 348:145`, fragmento con el
   término resaltado, etiqueta de sección (mayoría / disidencia).
   *Acepta:* buscar y llegar al fragmento correcto en menos de 3 segundos sobre
   2 tomos indexados.
+  Hecho: `GET /api/buscar` (`spectre/api/app.py`) envuelve `buscar_hibrido`
+  (PR-15) — filtros de año/tribunal/sección iguales a los del CLI — y arma,
+  por resultado, `cita`, `caratula`, `seccion_tipo`/`seccion_autor` y un
+  `extracto` recortado alrededor de la primera aparición de un término de la
+  consulta (no las primeras N letras a ciegas). El modelo de embeddings se
+  cachea por instancia de app (cargarlo en cada request rompería el criterio
+  de los 3 segundos); si `sentence-transformers` no está instalado, la
+  búsqueda degrada sola a léxico puro y lo dice en `modo` (D-6 + D-05
+  aplicado a la API: nunca fingir `hibrido`). `spectre/web/` — la pestaña
+  Buscar tiene el campo de consulta real; el resaltado del término (`<mark>`)
+  y el armado de la tarjeta de resultado (cita, badge de sección coloreado —
+  D-4: la disidencia se distingue visualmente de la mayoría a propósito—,
+  extracto) corren en el cliente con DOM plano, sin innerHTML. Verificado con
+  la suite (16 tests de API, filtros/fallback/caché del modelo incluidos) y
+  de punta a punta contra los 2 tomos reales indexados (348 y 349, 2.199
+  chunks, `data/spectre.db` + `data/vectors/` del propio repo): `spectre
+  serve` + `curl` a `/api/buscar` mide **21,6 s en la primera búsqueda**
+  (carga del modelo de embeddings, costo único por proceso) y **entre 85 ms y
+  140 ms en cada búsqueda siguiente** — muy por debajo de los 3 segundos del
+  criterio, que aplica a la búsqueda en sí, no al arranque del servidor. Ver
+  bitácora PR-21 para el detalle y por qué no se precarga el modelo en el
+  arranque.
 
 - [ ] **PR-22 `[N]` Vista del fallo**
   Texto completo por secciones, metadatos, citas salientes, enlace a la página
@@ -573,5 +595,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-20 cerrados (04/09/2026).
-Próximo: **PR-21**.
+a PR-21 cerrados (04/09/2026).
+Próximo: **PR-22**.

@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-20)
+## Estado del código (al cerrar PR-21)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -41,11 +41,15 @@ SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
 tribunal / tipo de sección), `spectre/api/` (`app.crear_app`: FastAPI que
 sirve `spectre/web/` estático y expone `GET /api/estado` — tomos + total de
-chunks, la única fuente que la UI consulta para saber si hay algo indexado),
-`spectre/web/` (HTML/CSS/JS planos sin build: layout con dos tabs, Buscar y
-Biblioteca, con estados vacíos honestos — todavía no buscan ni gestionan
-tomos, eso es PR-21/PR-23). `spectre serve` levanta ese servidor y abre el
-navegador. La §9 del plan dice cuál es el próximo PR.
+chunks — y `GET /api/buscar` — PR-21: envuelve `buscar_hibrido`, cachea el
+modelo de embeddings por instancia de app y degrada sola a léxico puro si
+`sentence-transformers` no está, diciéndolo en `modo` — nunca fingiendo
+`hibrido`), `spectre/web/` (HTML/CSS/JS planos sin build: layout con dos
+tabs, Buscar y Biblioteca; Buscar ya busca de verdad —campo de consulta,
+resultados con cita `Fallos: N:N`, extracto con el término resaltado en
+`<mark>`, etiqueta de sección mayoría/voto/disidencia/dictamen—, Biblioteca
+todavía es de solo lectura, eso es PR-23). `spectre serve` levanta ese
+servidor y abre el navegador. La §9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -179,9 +183,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   - `serve [--host H] [--port N] [--no-browser]` — migra la base si hace
     falta, levanta el servidor FastAPI (`spectre/api/`) que sirve
     `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
-    navegador (PR-20). La UI todavía no busca ni gestiona tomos (eso es
-    PR-21/PR-23): muestra layout, navegación entre Buscar/Biblioteca y
-    estados vacíos honestos leídos de `GET /api/estado`.
+    navegador (PR-20). La pestaña Buscar ya busca de verdad (PR-21):
+    `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
+    resaltado y etiqueta de sección. Biblioteca todavía es de solo lectura
+    (PR-23 le agrega subir/indexar desde la UI).
 
 ## Tests
 

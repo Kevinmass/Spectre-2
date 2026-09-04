@@ -17,7 +17,19 @@
 
   <main>
     <section id="tab-buscar" class="panel">
-      <p id="buscar-estado" class="vacio">Cargando…</p>
+      <form id="form-buscar" class="buscador">
+        <input
+          type="search"
+          id="campo-consulta"
+          name="q"
+          placeholder="Buscar en los fallos…"
+          autocomplete="off"
+          disabled
+        />
+        <button type="submit" disabled>Buscar</button>
+      </form>
+      <p id="buscar-aviso" class="vacio">Cargando…</p>
+      <ol id="resultados" class="resultados"></ol>
     </section>
 
     <section id="tab-biblioteca" class="panel" hidden>
