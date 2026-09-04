@@ -399,6 +399,108 @@ def test_borrar_tomo_arrastra_los_chunks(repo, conn):
     assert repo.contar_chunks() == 0
 
 
+def test_get_chunk(repo):
+    fallo_id = _fallo_con_chunks(repo, 2)
+    id_esperado = repo.list_chunks_de_fallo(fallo_id)[0].id
+    assert repo.get_chunk(id_esperado).texto == "chunk numero 0"
+
+
+def test_get_chunk_inexistente_es_none(repo):
+    assert repo.get_chunk(999) is None
+
+
+# --- filtrar_chunks (PR-15: filtros de la búsqueda híbrida) ------------- #
+
+
+def _fallo_con_metadatos(repo, *, fecha, tribunal_origen, secciones):
+    """`secciones` es una lista de tipos; un chunk por sección, en orden."""
+    numero = repo.conn.execute("SELECT count(*) FROM tomos").fetchone()[0] + 1
+    tomo_id = repo.insert_tomo(numero)
+    fallo_id = repo.insert_fallo(
+        tomo_id,
+        "A c/ B",
+        cita=f"{numero}:1",
+        fecha=fecha,
+        tribunal_origen=tribunal_origen,
+    )
+    ids_chunks = []
+    for i, tipo in enumerate(secciones):
+        cur = repo.conn.execute(
+            "INSERT INTO secciones (fallo_id, tipo, orden) VALUES (?, ?, ?)",
+            (fallo_id, tipo, i),
+        )
+        seccion_id = cur.lastrowid
+        repo.conn.commit()
+        n = repo.insert_chunks(fallo_id, [(seccion_id, i, f"texto {tipo}", None)])
+        assert n == 1
+        ids_chunks.append(repo.list_chunks_de_fallo(fallo_id)[-1].id)
+    return ids_chunks
+
+
+def test_filtrar_chunks_sin_filtros_devuelve_todo(repo):
+    ids = _fallo_con_metadatos(
+        repo, fecha="2020-01-01", tribunal_origen="Cámara X", secciones=["mayoria"]
+    )
+    assert repo.filtrar_chunks(ids) == set(ids)
+
+
+def test_filtrar_chunks_lista_vacia(repo):
+    assert repo.filtrar_chunks([]) == set()
+
+
+def test_filtrar_chunks_por_anio(repo):
+    a = _fallo_con_metadatos(
+        repo, fecha="2020-06-01", tribunal_origen=None, secciones=["mayoria"]
+    )
+    b = _fallo_con_metadatos(
+        repo, fecha="2021-06-01", tribunal_origen=None, secciones=["mayoria"]
+    )
+    assert repo.filtrar_chunks(a + b, anio=2020) == set(a)
+
+
+def test_filtrar_chunks_por_tribunal(repo):
+    a = _fallo_con_metadatos(
+        repo, fecha=None, tribunal_origen="Cámara Federal", secciones=["mayoria"]
+    )
+    b = _fallo_con_metadatos(
+        repo, fecha=None, tribunal_origen="Cámara Civil", secciones=["mayoria"]
+    )
+    assert repo.filtrar_chunks(a + b, tribunal_origen="Cámara Federal") == set(a)
+
+
+def test_filtrar_chunks_por_tipo_seccion(repo):
+    ids = _fallo_con_metadatos(
+        repo, fecha=None, tribunal_origen=None, secciones=["mayoria", "disidencia"]
+    )
+    assert repo.filtrar_chunks(ids, tipo_seccion="disidencia") == {ids[1]}
+
+
+def test_filtrar_chunks_combina_filtros(repo):
+    a = _fallo_con_metadatos(
+        repo,
+        fecha="2020-01-01",
+        tribunal_origen="Cámara X",
+        secciones=["mayoria", "voto"],
+    )
+    b = _fallo_con_metadatos(
+        repo,
+        fecha="2020-01-01",
+        tribunal_origen="Cámara Y",
+        secciones=["mayoria", "voto"],
+    )
+    esperado = {a[1]}
+    obtenido = repo.filtrar_chunks(
+        a + b, anio=2020, tribunal_origen="Cámara X", tipo_seccion="voto"
+    )
+    assert obtenido == esperado
+
+
+def test_filtrar_chunks_sin_seccion_no_matchea_filtro_de_tipo(repo):
+    fallo_id = _fallo_con_chunks(repo, 1)  # seccion_id NULL
+    chunk_id = repo.list_chunks_de_fallo(fallo_id)[0].id
+    assert repo.filtrar_chunks([chunk_id], tipo_seccion="mayoria") == set()
+
+
 # --- conexión ------------------------------------------------------------ #
 
 

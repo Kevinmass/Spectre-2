@@ -369,10 +369,19 @@ sin reparsear.
   index status` reporta también el índice léxico; nuevo `spectre index
   buscar`. Ver bitácora PR-14.
 
-- [ ] **PR-15 `[N]` Búsqueda híbrida**
+- [x] **PR-15 `[N]` Búsqueda híbrida**
   Fusión RRF de las dos listas; filtros por año, tribunal y tipo de sección.
   *Acepta:* un set de 10 consultas de prueba escritas a mano, con el resultado
   esperado documentado en el repo.
+  Hecho: `spectre/search/hybrid.py` — `buscar_hibrido` trae candidatos de
+  `IndiceLexico` e `IndiceVectorial`, filtra por `Repo.filtrar_chunks` (año de
+  `fallos.fecha`, `tribunal_origen`, `secciones.tipo`) y fusiona por RRF
+  (`k_rrf=60`, constante estándar). `spectre search buscar` en el CLI.
+  Verificado con el modelo real sobre el Tomo 348 completo (1.112 chunks): las
+  10 consultas de `docs/qa/consultas-PR-15.md` dan el resultado esperado,
+  incluida una (`extradición de un ciudadano extranjero`) que **solo** el lado
+  vectorial encuentra, y los dos filtros (tribunal, tipo de sección). Ver
+  bitácora PR-15.
 
 ### Fase 4 — Ingesta a escala (4 PRs)
 
@@ -491,5 +500,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-y PR-14 cerrados (04/09/2026).
-Próximo: **PR-15**.
+a PR-15 cerrados (04/09/2026).
+Próximo: **PR-16**.
