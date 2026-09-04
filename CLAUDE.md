@@ -17,22 +17,24 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-15)
+## Estado del código (al cerrar PR-16)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; el repo ya maneja chunks, el registro del modelo de embedding,
 `get_chunk` y `filtrar_chunks`), `spectre/jobs/runner.py`, `spectre/corpus/pdf/`
 (`extract` + `clean`), `spectre/corpus/fallo/` (`index_parser` + `segmenter` +
-`structure` + `sections` + `citations`), `spectre/chunking/` (`chunker`:
-ventanas de ~400 palabras por sección), `spectre/embed/` (`base.EmbeddingModel`
-+ `local_st.ModeloLocalST`, sentence-transformers detrás del extra opcional
-`[embed]`), `spectre/index/` (`vectors.IndiceVectorial`, LanceDB embebido en
-`data/vectors/`; `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la
-propia base SQLite, sincronizada sola por triggers), `spectre/search/`
+`structure` + `sections` + `citations`), `spectre/corpus/csjn/` (`catalog`:
+lista los tomos del sitio oficial — número, volumen, año, id CSJN — sin
+persistir), `spectre/chunking/` (`chunker`: ventanas de ~400 palabras por
+sección), `spectre/embed/` (`base.EmbeddingModel` + `local_st.ModeloLocalST`,
+sentence-transformers detrás del extra opcional `[embed]`), `spectre/index/`
+(`vectors.IndiceVectorial`, LanceDB embebido en `data/vectors/`;
+`lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
+SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
-tribunal / tipo de sección). El resto del árbol de la §4 del plan (`api/`,
-`web/`) es objetivo: todavía no hay código. La §9 del plan dice cuál es el
-próximo PR.
+tribunal / tipo de sección). El resto del árbol de la §4 del plan
+(`corpus/csjn/download`, `api/`, `web/`) es objetivo: todavía no hay código. La
+§9 del plan dice cuál es el próximo PR.
 
 ## Reglas de trabajo
 
@@ -94,16 +96,21 @@ esta máquina desde PR-15 (`pip install -e ".[embed]"`, sentence-transformers
 6.0.1 / torch 2.14.0): los `slow` que necesitan el modelo real corren acá sin
 paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
 
-- `python -m pytest` — corre la suite (rápida; excluye `-m slow`). Un solo test:
-  `python -m pytest tests/test_db.py::nombre`. La marca `slow` es la medición de
-  aceptación sobre el Tomo 348 completo (~2 min, necesita `data/tomos/348.pdf`):
-  `python -m pytest -m slow`.
+- `python -m pytest` — corre la suite (rápida; excluye `-m slow` y `-m red`).
+  Un solo test: `python -m pytest tests/test_db.py::nombre`. La marca `slow`
+  es la medición de aceptación sobre el Tomo 348 completo (~2 min, necesita
+  `data/tomos/348.pdf`): `python -m pytest -m slow`. La marca `red` (PR-16)
+  pega contra un sitio real por HTTP (el catálogo de la CSJN); CI no depende
+  de que ese sitio esté arriba: `python -m pytest -m red`.
 - `ruff check .` — lint. `ruff format --check .` — formato (el gate de CI corre
   `ruff check`; el formato se verifica a mano antes de commitear).
 - `python -m spectre.cli <sub>` o `spectre <sub>` (entry point instalado):
   - `spectre config` — imprime las rutas resueltas (verificación a ojo de D-02).
   - `spectre db migrate` — crea `data/spectre.db` y aplica las migraciones
     pendientes de `spectre/db/migrations/`. `spectre db status` — qué se aplicó.
+  - `spectre csjn catalog [--muestra N]` — lista los tomos del sitio oficial de
+    la CSJN (número, volumen, año, id CSJN); mide, no persiste (persistir es
+    de PR-17 en adelante). Necesita red real.
   - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
@@ -149,8 +156,12 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   versiona.
 - Las mediciones de aceptación sobre el tomo entero son tests `slow` + `skipif`
   que necesitan `data/tomos/348.pdf`. El `pytest` de todos los días las saltea
-  (`addopts = -m 'not slow'`); corrélas con `pytest -m slow` (tardan minutos y
-  CI no las ve).
+  (`addopts = -m 'not slow and not red'`); corrélas con `pytest -m slow`
+  (tardan minutos y CI no las ve).
+- `red` (PR-16): tests que pegan contra un sitio real por HTTP (el catálogo de
+  la CSJN, `spectre/corpus/csjn/catalog.py`). Rápidos (segundos), pero CI no
+  depende de que el sitio externo esté arriba, así que quedan afuera del
+  default igual que `slow`: `pytest -m red`.
 
 ## Git
 

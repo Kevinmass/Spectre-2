@@ -385,12 +385,23 @@ sin reparsear.
 
 ### Fase 4 — Ingesta a escala (4 PRs)
 
-- [ ] **PR-16 `[N]` Catálogo CSJN**
+- [x] **PR-16 `[N]` Catálogo CSJN**
   Listar los tomos disponibles (número, volumen, año, id de la CSJN).
   **Empieza con un spike:** confirmar cómo se obtiene el PDF de un tomo antes de
   construir nada. Si no hay descarga programática, este PR entrega el catálogo y
   la subida manual cubre el resto.
   *Acepta:* catálogo con los 349 tomos y el año de cada uno.
+  Hecho: spike resuelto — **sí hay descarga programática** (riesgo R-3
+  cerrado): `GET verTomo?tomoId=N` entrega el PDF directo (`content-type:
+  application/pdf`), sin paso intermedio; PR-17 la implementa.
+  `spectre/corpus/csjn/catalog.py` — `listar_catalogo()` pagina el listado
+  real (`POST /sj/tomosFallos`, 5 páginas) y devuelve 421 filas / 349 números
+  de tomo distintos (1–349, sin huecos). Dos hallazgos del spike, documentados
+  y **no resueltos acá** (persistir es de PR-17 en adelante): un número de
+  tomo puede tener más de un volumen físico (44 casos, ej. `347-I`/`347-II` —
+  el esquema actual con `tomos.numero UNIQUE` no lo contempla) y el año de los
+  tomos viejos (hasta ~1917) es un rango de texto (`"1898/1899"`), no un
+  entero. `spectre csjn catalog`. Ver bitácora PR-16.
 
 - [ ] **PR-17 `[N]` Descargador**
   Reintentos, caché en disco por sha256, ritmo respetuoso con el servidor.
@@ -470,6 +481,8 @@ fallos falsos.
 `verTomo?tomoId=N`; falta confirmar que eso entrega el PDF.
 *Mitigación:* spike al inicio de PR-16. La subida manual ya está en el MVP, así
 que el proyecto no depende de esto.
+**Cerrado en PR-16**: sí entrega el PDF directo (confirmado con un `HEAD`
+real). PR-17 implementa la descarga sobre esto.
 
 **R-4. El tiempo de indexación de la colección completa es desconocido.** No
 tengo una medición, y estimarlo sin medir sería inventar.
@@ -500,5 +513,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-15 cerrados (04/09/2026).
-Próximo: **PR-16**.
+a PR-16 cerrados (04/09/2026).
+Próximo: **PR-17**.

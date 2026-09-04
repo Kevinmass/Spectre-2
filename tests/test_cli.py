@@ -312,6 +312,33 @@ def test_index_sin_accion_es_error():
     assert exc.value.code != 0
 
 
+# --- csjn (PR-16) -------------------------------------------------------- #
+
+
+@pytest.mark.red
+def test_csjn_catalog_imprime_el_resumen(capsys):
+    # El sitio real crece con el tiempo (la CSJN publica tomos nuevos); no se
+    # fija un total exacto, ver test_catalog.py::test_listar_catalogo_real.
+    assert main(["csjn", "catalog"]) == 0
+    out = capsys.readouterr().out
+    assert "filas del catálogo" in out
+    assert "números de tomo distintos" in out
+    assert "con más de un volumen" in out
+
+
+@pytest.mark.red
+def test_csjn_catalog_muestra_filas(capsys):
+    assert main(["csjn", "catalog", "--muestra", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "tomoId=" in out
+
+
+def test_csjn_sin_accion_es_error():
+    with pytest.raises(SystemExit) as exc:
+        main(["csjn"])
+    assert exc.value.code != 0
+
+
 @pytest.mark.parametrize("cmd", ["ingest", "serve"])
 def test_subcomandos_vacios_fallan_ruidosamente(cmd):
     # Ningún stub que reporte éxito (D-05).

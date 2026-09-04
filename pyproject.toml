@@ -48,7 +48,10 @@ select = ["E", "F", "I", "UP", "B", "W"]
 testpaths = ["tests"]
 # `slow` se excluye por defecto: hoy es la medición de aceptación sobre el Tomo
 # 348 completo (~2 min, y necesita data/tomos/348.pdf). Correrla: `pytest -m slow`.
-addopts = "-ra -m 'not slow'"
+# `red` también: pega contra el sitio real de la CSJN (PR-16); CI no tiene por
+# qué depender de que ese sitio esté arriba. Correrla: `pytest -m red`.
+addopts = "-ra -m 'not slow and not red'"
 markers = [
     "slow: medición sobre un fixture grande no versionado; fuera del run por defecto",
+    "red: pega contra un sitio real por HTTP; fuera del run por defecto",
 ]

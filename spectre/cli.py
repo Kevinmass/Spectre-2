@@ -1,10 +1,11 @@
 """CLI de Spectre.
 
-Estado PR-15: subcomandos reales `config` (rutas resueltas), `db`
-(migraciones), `pdf` (`stats` mide extracción/offset, `clean` mide la limpieza
-de texto, `index` parsea el índice por nombres de las partes, `segment` arma
-los fallos con su cita, `meta` extrae fecha / jueces / recurso / tribunal /
-partes, `sections` parte cada fallo en dictamen / mayoría / votos /
+Estado PR-16: subcomandos reales `config` (rutas resueltas), `db`
+(migraciones), `csjn` (`catalog` lista los tomos del sitio oficial: número,
+volumen, año, id CSJN), `pdf` (`stats` mide extracción/offset, `clean` mide la
+limpieza de texto, `index` parsea el índice por nombres de las partes,
+`segment` arma los fallos con su cita, `meta` extrae fecha / jueces / recurso /
+tribunal / partes, `sections` parte cada fallo en dictamen / mayoría / votos /
 disidencias, `citations` extrae las citas `Fallos: N:N` a precedentes,
 `chunks` fragmenta cada sección en ventanas de ~400 palabras), `embed`
 (`status` dice qué chunks hay que reindexar, `probe` embebe un texto con el
@@ -754,6 +755,34 @@ def _cmd_search_buscar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_csjn_catalog(args: argparse.Namespace) -> int:
+    from spectre.corpus.csjn import listar_catalogo
+
+    entradas = listar_catalogo()
+    numeros = {e.numero for e in entradas}
+    por_numero: dict[int, list] = {}
+    for e in entradas:
+        por_numero.setdefault(e.numero, []).append(e)
+    multivolumen = {n: es for n, es in por_numero.items() if len(es) > 1}
+
+    filas = [
+        ("filas del catálogo", len(entradas)),
+        ("números de tomo distintos", len(numeros)),
+        ("rango de números", f"{min(numeros)}–{max(numeros)}" if numeros else "—"),
+        ("con más de un volumen", f"{len(multivolumen)} números"),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+
+    if args.muestra is not None:
+        print(f"\n--- primeras {args.muestra} filas ---")
+        for e in entradas[: args.muestra]:
+            etiqueta = f"{e.numero}-{e.volumen}" if e.volumen else str(e.numero)
+            print(f"  {etiqueta:>8}  {e.anio:<10}  tomoId={e.csjn_tomo_id}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -785,6 +814,19 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="Lista migraciones aplicadas y pendientes"
     )
     p_db_status.set_defaults(func=_cmd_db_status)
+
+    p_csjn = sub.add_parser("csjn", help="Catálogo de tomos en el sitio de la CSJN")
+    csjn_sub = p_csjn.add_subparsers(
+        dest="csjn_command", required=True, metavar="<acción>"
+    )
+    p_csjn_catalog = csjn_sub.add_parser(
+        "catalog",
+        help="Lista los tomos disponibles (número, volumen, año, id CSJN)",
+    )
+    p_csjn_catalog.add_argument(
+        "--muestra", type=int, metavar="N", help="imprime las primeras N filas"
+    )
+    p_csjn_catalog.set_defaults(func=_cmd_csjn_catalog)
 
     p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
     pdf_sub = p_pdf.add_subparsers(
