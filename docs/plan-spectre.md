@@ -340,10 +340,18 @@ sin reparsear.
   modelo real (que baja torch) es dependencia opcional y su test es `slow`; sin
   el paquete, `ModeloLocalST` revienta claro (D-05). Ver bitácora PR-12.
 
-- [ ] **PR-13 `[N]` Índice vectorial**
+- [x] **PR-13 `[N]` Índice vectorial**
   LanceDB, escritura por lotes, reanudable.
   *Acepta:* indexar el Tomo 348 completo y recuperar el vecino más cercano de un
   chunk conocido.
+  Hecho: `spectre/index/vectors.py` — `IndiceVectorial` sobre LanceDB
+  (`data/vectors/`), una fila por chunk (`chunk_id`, `modelo`, `vector`).
+  `upsert` con `merge_insert` sobre `chunk_id` → **idempotente / reanudable**
+  (un reintento no duplica). `buscar(v, k)` devuelve los `chunk_id` más cercanos
+  por coseno. Verificado con LanceDB real (vectores de juguete) y con la cadena
+  `chunker → índice` sobre el fixture. El criterio completo (Tomo 348 +
+  embeddings reales) es `slow` y necesita `[embed]` (torch); no corrió en esta
+  sesión. `lancedb` pasó a dep dura. Ver bitácora PR-13.
 
 - [ ] **PR-14 `[N]` Índice léxico**
   FTS5 configurado para español.
@@ -470,5 +478,5 @@ vuelve a abrir un PDF.
 
 ## 9. Estado
 
-PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026).
-Próximo: **PR-13**.
+PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13 cerrado (04/09/2026).
+Próximo: **PR-14**.

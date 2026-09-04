@@ -1,5 +1,5 @@
-"""PR-01/02/04/06-12 — `--help` anda, `db` migra, `pdf` mide, `embed` reporta,
-los vacíos revientan."""
+"""PR-01/02/04/06-13 — `--help` anda, `db` migra, `pdf` mide, `embed` e `index`
+reportan, los vacíos revientan."""
 
 import importlib.util
 from pathlib import Path
@@ -268,6 +268,47 @@ def test_embed_probe_sin_sentence_transformers_falla_claro():
 def test_embed_sin_accion_es_error():
     with pytest.raises(SystemExit) as exc:
         main(["embed"])
+    assert exc.value.code != 0
+
+
+# --- index (PR-13) ---------------------------------------------------- #
+
+
+def test_index_status_indice_vacio_sin_base(capsys, datos_tmp):
+    assert main(["index", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "índice vectorial" in out
+    assert "sin crear" in out
+    assert "no existe" in out
+
+
+def test_index_status_cuenta_vectores_y_chunks(capsys, datos_tmp):
+    main(["db", "migrate"])
+    capsys.readouterr()
+    from spectre.db import Repo, connect
+    from spectre.index import IndiceVectorial
+
+    s = get_settings()
+    conn = connect(s.db_path)
+    repo = Repo(conn)
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.insert_chunks(fallo_id, [(None, i, f"t{i}", None) for i in range(3)])
+    conn.close()
+
+    idx = IndiceVectorial(s.vectors_dir, dimension=4)
+    idx.upsert([(1, [1, 0, 0, 0], "m"), (2, [0, 1, 0, 0], "m")])
+
+    assert main(["index", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "2 vectores" in out
+    assert "chunks en SQLite" in out
+    assert "chunks en el índice vectorial" in out
+
+
+def test_index_sin_accion_es_error():
+    with pytest.raises(SystemExit) as exc:
+        main(["index"])
     assert exc.value.code != 0
 
 

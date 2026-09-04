@@ -6,9 +6,10 @@ Estado PR-12: subcomandos reales `config` (rutas resueltas), `db` (migraciones),
 con su cita, `meta` extrae fecha / jueces / recurso / tribunal / partes,
 `sections` parte cada fallo en dictamen / mayoría / votos / disidencias,
 `citations` extrae las citas `Fallos: N:N` a precedentes, `chunks` fragmenta
-cada sección en ventanas de ~400 palabras) y `embed` (`status` dice qué chunks
-hay que reindexar, `probe` embebe un texto con el modelo real). El resto existe
-en `--help` pero **revienta si lo invocás** (D-05).
+cada sección en ventanas de ~400 palabras), `embed` (`status` dice qué chunks
+hay que reindexar, `probe` embebe un texto con el modelo real) e `index`
+(`status` mira el índice vectorial LanceDB). El resto existe en `--help` pero
+**revienta si lo invocás** (D-05).
 """
 
 from __future__ import annotations
@@ -623,6 +624,47 @@ def _cmd_embed_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_index_status(_args: argparse.Namespace) -> int:
+    from spectre.db import Repo, connect
+    from spectre.index import IndiceVectorial
+
+    s = get_settings()
+    idx = IndiceVectorial(s.vectors_dir)
+    total_vectores = idx.contar()
+    dim = idx.dimension
+    filas: list[tuple[str, object]] = [
+        ("vectors_dir", s.vectors_dir),
+        (
+            "índice vectorial",
+            f"{total_vectores} vectores"
+            + (f", dimensión {dim}" if dim else "  (sin crear todavía)"),
+        ),
+    ]
+    for modelo, n in sorted(idx.modelos().items()):
+        filas.append((f"  con modelo {modelo}", n))
+
+    if s.db_path.exists():
+        conn = connect(s.db_path)
+        try:
+            repo = Repo(conn)
+            total_chunks = repo.contar_chunks()
+            pendientes = repo.contar_chunks_pendientes(s.embedding_model)
+        finally:
+            conn.close()
+        filas += [
+            ("chunks en SQLite", total_chunks),
+            ("chunks sin embedding", f"{pendientes}  (modelo {s.embedding_model})"),
+            ("chunks en el índice vectorial", len(idx.ids())),
+        ]
+    else:
+        filas.append(("base", f"{s.db_path}  (no existe — corré `spectre db migrate`)"))
+
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
 def _hacer_stub(nombre: str, pr: str) -> Callable[[argparse.Namespace], int]:
     def _run(_args: argparse.Namespace) -> int:
         raise SystemExit(
@@ -773,6 +815,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--modelo", help="usar este modelo en vez del de la config"
     )
     p_embed_probe.set_defaults(func=_cmd_embed_probe)
+
+    p_index = sub.add_parser("index", help="Índice vectorial: estado")
+    index_sub = p_index.add_subparsers(
+        dest="index_command", required=True, metavar="<acción>"
+    )
+    p_index_status = index_sub.add_parser(
+        "status", help="Vectores en el índice y chunks que faltan indexar"
+    )
+    p_index_status.set_defaults(func=_cmd_index_status)
 
     for nombre, pr in _PENDIENTES.items():
         p = sub.add_parser(nombre, help=f"(vacío — {pr})")
