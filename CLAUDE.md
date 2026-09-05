@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-24)
+## Estado del código (al cerrar PR-25)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -74,8 +74,14 @@ servidor y abre el navegador. `scripts/arrancar.ps1` (Windows) /
 `scripts/arrancar.sh` (macOS/Linux) — PR-24: crean el venv, instalan
 `.[embed]`, y llaman a `scripts/arrancar.py`, que baja el modelo real,
 intenta indexar un tomo de muestra desde la CSJN (best-effort — si el sitio
-no responde, sigue igual, no aborta) y levanta `spectre serve`. La §9 del
-plan dice cuál es el próximo PR.
+no responde, sigue igual, no aborta) y levanta `spectre serve`.
+`scripts/medir_ingesta.py` (PR-25) mide tiempos reales de `spectre ingest`
+por etapa, memoria pico y tamaño de índice corriendo un subproceso real por
+tomo contra un `data_dir` temporal (el subproceso se mide a sí mismo antes
+de salir — sondear la memoria de un proceso ajeno desde el padre no fue
+confiable en esta máquina); números y su extrapolación honesta a la
+colección completa en `docs/qa/mediciones.md`. La §9 del plan dice cuál es
+el próximo PR.
 
 ## Reglas de trabajo
 
@@ -228,6 +234,16 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   vacío) y corre `spectre serve`. La lógica que necesita `spectre` ya
   importable vive en Python (testeable); los `.ps1`/`.sh` solo hacen lo de
   antes de eso.
+- `python scripts/medir_ingesta.py [pdf:numero ...]` — PR-25, medición
+  end-to-end: corre `spectre ingest` de verdad, un subproceso por tomo
+  (`--pdf`, sin depender de la CSJN), contra un `data_dir` temporal, uno de
+  los tomos atrás del otro. Mide tiempo por etapa (de
+  `jobs.iniciado_at`/`terminado_at`), memoria pico (el subproceso se mide a
+  sí mismo justo antes de salir) y tamaño de índice final (`spectre.db` +
+  `data/vectors/`). Sin argumentos usa `data/tomos/348.pdf` y `349.pdf`.
+  Números y la extrapolación honesta a los 349 tomos del catálogo (con sus
+  límites explícitos, D-10/R-1) están en `docs/qa/mediciones.md`, no en el
+  código.
 
 ## Tests
 

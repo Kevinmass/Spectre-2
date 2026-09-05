@@ -30,6 +30,9 @@ dev = [
     "ruff>=0.6",
     # TestClient de FastAPI (PR-20) lo necesita para hacer requests in-process.
     "httpx>=0.27",
+    # Medición de memoria pico de un proceso de ingesta (PR-25,
+    # scripts/medir_ingesta.py). No lo usa el producto, solo la medición.
+    "psutil>=6.0",
 ]
 # Embeddings locales (PR-12). Arrastra torch: pesado y no hace falta para
 # parsear ni segmentar, así que va aparte. CI no lo instala; para correr

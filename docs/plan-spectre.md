@@ -589,10 +589,28 @@ sin reparsear.
   veces, terminó las dos con `spectre serve` real respondiendo en
   `http://127.0.0.1:8000/`. Ver bitácora PR-24.
 
-- [ ] **PR-25 `[N]` Medición end-to-end**
+- [x] **PR-25 `[N]` Medición end-to-end**
   Tiempos reales de indexación por tomo, tamaño del índice, memoria pico.
   Extrapolación honesta a la colección completa.
   *Acepta:* una tabla de números medidos en `docs/qa/mediciones.md`.
+  Hecho: `scripts/medir_ingesta.py` corre `spectre ingest` de verdad (un
+  subproceso por tomo, contra un `data_dir` temporal) sobre los tomos 348 y
+  349, uno atrás del otro en la misma base, y mide tiempo por etapa (de
+  `jobs.iniciado_at`/`terminado_at`), memoria pico (el subproceso se mide a
+  **sí mismo** justo antes de salir — sondear la memoria de un proceso ajeno
+  desde el padre resultó no ser confiable en esta sesión, ver bitácora) y
+  tamaño de índice (`spectre.db` + `data/vectors/` reales). Medido: **106,0 s
+  / 106,9 s** de ingesta completa por tomo, **~5,3 / 5,0 GB** de memoria
+  pico, **31,2 MB + 3,4 MB** de índice para los dos tomos juntos (2.199
+  chunks). La extrapolación a los 349 tomos del catálogo (PR-16) da un techo
+  de ~10,3 h y ~6,0 GB **si todo el catálogo fuera `digital`** como 348/349
+  — con la salvedad explícita (R-1) de que no se sabe qué fracción de los
+  349 tomos reales es `digital` contra `requiere_ocr`, así que no se fuerza
+  un número de colección más preciso que ese techo. Hallazgo aparte que
+  cambia cómo se lee R-4: la memoria pico **no escala con la cantidad de
+  tomos** (un proceso por invocación de `spectre ingest`, D-06), solo el
+  tiempo y el disco. Tabla completa en `docs/qa/mediciones.md`. Ver bitácora
+  PR-25.
 
 - [ ] **PR-26 `[N]` Documentación de uso**
   README real y una guía corta escrita para una abogada, no para un dev.
@@ -653,5 +671,5 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-24 cerrados (04/09/2026).
-Próximo: **PR-25**.
+a PR-25 cerrados (04/09/2026).
+Próximo: **PR-26**.
