@@ -17,7 +17,7 @@ arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con 
 criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
 es el próximo PR.
 
-## Estado del código (al cerrar PR-25)
+## Estado del código (al cerrar PR-26 — los 27 PRs del plan están cerrados)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -80,8 +80,12 @@ por etapa, memoria pico y tamaño de índice corriendo un subproceso real por
 tomo contra un `data_dir` temporal (el subproceso se mide a sí mismo antes
 de salir — sondear la memoria de un proceso ajeno desde el padre no fue
 confiable en esta máquina); números y su extrapolación honesta a la
-colección completa en `docs/qa/mediciones.md`. La §9 del plan dice cuál es
-el próximo PR.
+colección completa en `docs/qa/mediciones.md`. `README.md` (PR-26) es la
+instalación real (los scripts de PR-24) y `docs/guia-uso.md` (PR-26) es la
+guía de uso sin jerga de programador, escrita para quien solo quiere buscar
+fallos, no tocar el código. Con esto el plan (`docs/plan-spectre.md`, §6/§9)
+queda completo: lo que sigue no es un PR más de esa lista sino una decisión
+nueva sobre qué de la §8 (fuera del MVP) vale la pena.
 
 ## Reglas de trabajo
 
