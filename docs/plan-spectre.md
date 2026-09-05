@@ -612,9 +612,17 @@ sin reparsear.
   tiempo y el disco. Tabla completa en `docs/qa/mediciones.md`. Ver bitácora
   PR-25.
 
-- [ ] **PR-26 `[N]` Documentación de uso**
+- [x] **PR-26 `[N]` Documentación de uso**
   README real y una guía corta escrita para una abogada, no para un dev.
   *Acepta:* alguien que no vio el proyecto puede instalarlo y buscar.
+  Hecho: `README.md` reemplaza el stub de "en reconstrucción" por instalación
+  real (los scripts de PR-24), uso diario y desarrollo, con un enlace a la
+  guía para quien no programa. `docs/guia-uso.md` es esa guía — sin jerga de
+  programador: cómo abrir Spectre, cómo leer un resultado (cita, extracto,
+  etiqueta de sección), cómo abrir el fallo completo y el PDF en la página
+  exacta, cómo cargar tomos nuevos desde la pestaña Biblioteca (por CSJN o
+  subiendo un PDF) y qué significa que un tomo quede `requiere_ocr`. Ver
+  bitácora PR-26.
 
 **Total: 27 PRs.**
 
@@ -671,5 +679,9 @@ vuelve a abrir un PDF.
 ## 9. Estado
 
 PR-00 y PR-01 cerrados (02/09/2026). PR-02 a PR-12 cerrados (03/09/2026). PR-13
-a PR-25 cerrados (04/09/2026).
-Próximo: **PR-26**.
+a PR-25 cerrados (04/09/2026). PR-26 cerrado (05/09/2026).
+
+**Los 27 PRs del plan están cerrados.** El MVP descrito en este documento está
+completo. Lo que sigue no es un PR más de esta lista sino una decisión nueva:
+qué de la sección 8 (fuera del MVP) vale la pena, o simplemente usar Spectre
+como está.
