@@ -146,10 +146,17 @@ pendiente: se puede empezar hoy.*
   facetas — va con PR-B3/B4). Medido sobre la base real: sección 10→1,
   `anio_hasta=2010`→0. Detalle en `docs/qa/bitacora-PR-A2.md`.
 
-- [ ] **PR-A3 `[N]` Arreglar el resaltado**
+- [x] **PR-A3 `[N]` Arreglar el resaltado**
   Lista de palabras vacías del castellano y límites de palabra en el regex.
   *Acepta:* buscar "despido sin causa" no resalta "sino"; buscar
   "responsabilidad del estado" no resalta "del".
+  *Hecho:* `PALABRAS_VACIAS` en `spectre/web/app.js` (~130 función-palabras);
+  `terminosDe` tokeniza con `\p{L}` (antes partía "acción" en "acci") y filtra
+  vacías; `resaltarEn` usa lookarounds Unicode en vez de `\b` ASCII (anda con
+  acentos: "café", "área"). Verificado con `node tests/verificar_resaltado.mjs`
+  (las dos de aceptación + acentos + `estado`/`estados`). `_terminos` del
+  backend (posiciona el extracto) tiene el mismo bug de vacías — lo agarra
+  PR-A4. Detalle en `docs/qa/bitacora-PR-A3.md`.
 
 - [ ] **PR-A4 `[N]` Extractos que empiecen donde corresponde**
   Recortar en borde de palabra, y en borde de oración si hay uno cerca.
@@ -327,8 +334,8 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0, PR-A1 y PR-A2 cerrados**. Próximo: **PR-A3** (arreglar el
-resaltado). PR-A3 a PR-A6 no dependen de nada pendiente.
+Tanda A: **PR-A0 a PR-A3 cerrados**. Próximo: **PR-A4** (extractos que
+empiecen donde corresponde). PR-A4 a PR-A6 no dependen de nada pendiente.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
