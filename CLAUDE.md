@@ -68,8 +68,10 @@ ya fallida, mismo comportamiento que `spectre ingest` desde PR-19).
 Biblioteca, más una vista de fallo sin tab propio —se llega clickeando un
 resultado—; Buscar ya busca de verdad —campo de consulta, resultados
 agrupados por fallo con sus pasajes anidados (PR-A1), cita `Fallos: N:N`,
-extracto con el término resaltado en `<mark>`, etiqueta de sección
-mayoría/voto/disidencia/dictamen, y una fila de filtros (PR-A2): tribunal,
+extracto con el término resaltado en `<mark>` —PR-A3: sin palabras vacías del
+castellano y con límites de palabra Unicode, "sin" ya no marca "sino"—,
+etiqueta de sección mayoría/voto/disidencia/dictamen, y una fila de filtros
+(PR-A2): tribunal,
 sección, rango de años y "solo texto", que se aplican sobre la búsqueda a la
 vista—, la vista de fallo muestra el
 texto completo por sección, metadatos, citas salientes y el enlace al PDF en
@@ -95,7 +97,7 @@ quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
 tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
 con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
 **Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo),
-PR-A2 (filtros en la pantalla + año como rango).
+PR-A2 (filtros en la pantalla + año como rango), PR-A3 (resaltado sin ruido).
 Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
 endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
 la ingesta pica 5,3 GB de memoria (PR-C4).
@@ -285,6 +287,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   la CSJN, `spectre/corpus/csjn/catalog.py`). Rápidos (segundos), pero CI no
   depende de que el sitio externo esté arriba, así que quedan afuera del
   default igual que `slow`: `pytest -m red`.
+- `tests/verificar_resaltado.mjs` (PR-A3): la única verificación que no es
+  Python. Carga `spectre/web/app.js` con un DOM de mentira y chequea
+  `terminosDe` / `resaltarEn` (palabras vacías + límites de palabra). No la
+  mira `pytest` ni CI; se corre a mano: `node tests/verificar_resaltado.mjs`.
 
 ## Git
 

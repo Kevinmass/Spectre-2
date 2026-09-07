@@ -7,6 +7,35 @@ const ETIQUETAS_SECCION = {
   dictamen: "Dictamen",
 };
 
+// Palabras vacías del castellano (§2.3 del plan v2): artículos,
+// preposiciones, conjunciones, pronombres y determinantes. No se resaltan —
+// antes "del", "por" o "sin" se marcaban como si fueran el término buscado.
+const PALABRAS_VACIAS = new Set([
+  "el", "la", "lo", "los", "las", "un", "una", "unos", "unas", "al", "del",
+  "de", "a", "ante", "bajo", "cabe", "con", "contra", "desde", "durante",
+  "en", "entre", "hacia", "hasta", "mediante", "para", "por", "según", "sin",
+  "so", "sobre", "tras",
+  "y", "e", "o", "u", "ni", "que", "pero", "mas", "sino", "aunque", "porque",
+  "pues", "como", "si", "cuando", "mientras", "donde",
+  "yo", "tú", "él", "ella", "ello", "nosotros", "vosotros", "ellos", "ellas",
+  "me", "te", "se", "nos", "os", "le", "les",
+  "mi", "mis", "tu", "tus", "su", "sus", "nuestro", "nuestra", "nuestros",
+  "nuestras", "vuestro", "vuestra",
+  "este", "esta", "esto", "estos", "estas", "ese", "esa", "eso", "esos",
+  "esas", "aquel", "aquella", "aquello", "aquellos", "aquellas",
+  "cual", "cuales", "quien", "quienes", "cuyo", "cuya", "cuyos", "cuyas",
+  "otro", "otra", "otros", "otras", "mismo", "misma", "mismos", "mismas",
+  "tan", "tanto", "tanta", "tantos", "tantas", "todo", "toda", "todos",
+  "todas", "cada", "algún", "alguna", "alguno", "algunos", "algunas",
+  "ningún", "ninguna", "ninguno", "mucho", "mucha", "muchos", "muchas",
+  "poco", "poca", "pocos", "pocas", "más", "menos", "muy",
+  "no", "sí", "ya", "así", "también", "tampoco", "siempre", "nunca", "solo",
+  "sólo", "aún", "aun",
+  "es", "son", "ser", "fue", "fueron", "era", "eran", "sea", "sean",
+  "ha", "han", "haber", "hay", "había", "habían", "hubo",
+  "está", "están", "estaba", "estar",
+]);
+
 // Sondea `/api/estado` cada 2s mientras la pestaña Biblioteca está a la
 // vista, para que el progreso de una indexación en curso (PR-23) se vea
 // avanzar solo. Se corta al salir de la pestaña: nadie necesita seguir
@@ -120,8 +149,9 @@ async function cargarEstado() {
 
 function terminosDe(consulta) {
   const vistos = new Set();
-  for (const t of consulta.toLowerCase().match(/\w+/g) || []) {
-    if (t.length > 2) {
+  // Tokeniza por letras/dígitos Unicode: "acción" es un término, no "acci".
+  for (const t of consulta.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []) {
+    if (t.length > 2 && !PALABRAS_VACIAS.has(t)) {
       vistos.add(t);
     }
   }
@@ -138,7 +168,15 @@ function resaltarEn(contenedor, texto, terminos) {
     contenedor.textContent = texto;
     return;
   }
-  const patron = new RegExp(`(${terminos.map(escaparRegex).join("|")})`, "gi");
+  // Límites de palabra Unicode-aware: "sin" no matchea dentro de "sino",
+  // "estado" no matchea dentro de "estados". `\b` de JS es solo ASCII y
+  // rompería con acentos ("café", "área"), así que se usan lookarounds
+  // contra letra/dígito.
+  const alternativas = terminos.map(escaparRegex).join("|");
+  const patron = new RegExp(
+    `(?<![\\p{L}\\p{N}])(${alternativas})(?![\\p{L}\\p{N}])`,
+    "giu",
+  );
   let ultimo = 0;
   let m;
   while ((m = patron.exec(texto)) !== null) {
