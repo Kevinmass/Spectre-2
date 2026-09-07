@@ -24,12 +24,14 @@ lectura:
   filtros que el backend ya aceptaba (`tribunal`, `seccion`, `solo_lexico`) y
   pasa el de año a rango (`anio_desde` / `anio_hasta`, inclusivos, sueltos o
   combinados).
-- `/api/fallos/{cita}` (PR-22): el fallo completo por secciones + metadatos +
-  citas salientes. Las citas se recalculan sobre el texto ya persistido
-  (`extraer_citas`, PR-10) porque el pipeline (PR-19) decidió a propósito no
-  guardarlas — son la materia prima de un grafo de precedentes que el plan
-  deja fuera del MVP (§8.3) — así que la única forma honesta de mostrarlas es
-  calcularlas al vuelo, no inventar una tabla que nadie llena.
+- `/api/fallos/{cita}` (PR-22 + PR-C1): el fallo completo por secciones +
+  metadatos + citas **salientes** (a qué precedentes cita) y **entrantes**
+  (qué fallos del corpus indexado lo citan). Desde PR-C1 el pipeline persiste
+  las salientes en la tabla `citas` (etapa `estructurar`), así que se leen de
+  ahí; si un tomo se indexó antes de PR-C1 y no tiene filas, se recalculan al
+  vuelo con `extraer_citas` (PR-10) para no perder la vista —las entrantes, en
+  cambio, necesitan el reindexado: no se pueden calcular sin las citas de todos
+  los demás fallos ya guardadas—.
 - `/api/tomos/{numero}/pdf` (PR-22): sirve el PDF del tomo tal cual está en
   disco, para el enlace "ver en el PDF" de la vista de fallo (D-9: el PDF
   vive en disco, subido a mano o descargado; acá solo se lo expone).
@@ -349,7 +351,13 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
             tomo = repo.get_tomo(fallo.tomo_id)
             secciones = repo.list_secciones_de_fallo(fallo.id)
             texto_completo = "\n".join(sec.texto for sec in secciones if sec.texto)
-            citas = extraer_citas(texto_completo)
+
+            # Salientes: de la tabla `citas` (PR-C1). Si el tomo se indexó antes
+            # de PR-C1 no hay filas — se recalculan al vuelo, como en PR-22.
+            citas = repo.list_citas_de_fallo(fallo.id)
+            if not citas:
+                citas = extraer_citas(texto_completo)
+            entrantes = repo.citas_entrantes(fallo.id)
             pdf_path = Path(tomo.pdf_path) if tomo and tomo.pdf_path else None
 
             return {
@@ -380,6 +388,15 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                         "contexto": c.contexto,
                     }
                     for c in citas
+                ],
+                "citas_entrantes": [
+                    {
+                        "cita": e.cita,
+                        "caratula": e.caratula,
+                        "pagina_citada": e.pagina_citada,
+                        "contexto": e.contexto,
+                    }
+                    for e in entrantes
                 ],
             }
         finally:

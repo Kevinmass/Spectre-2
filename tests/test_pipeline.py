@@ -177,6 +177,7 @@ def _resumen(conn, tomo_id):
         tuple(sorted((f.cita, f.fecha, f.jueces) for f in fallos)),
         secciones,
         len(repo.list_chunks_de_tomo(tomo_id)),
+        repo.contar_citas_de_tomo(tomo_id),
     )
 
 
@@ -196,6 +197,14 @@ def test_pipeline_completo_sobre_el_fixture_real(conn):
     voto34 = Repo(conn).list_secciones_de_fallo(fallos[1].id)
     assert {s.tipo for s in voto34} == {"mayoria", "voto"}
     assert Repo(conn).contar_chunks() > 0
+
+    # PR-C1: la etapa `estructurar` volcó las citas salientes a la tabla.
+    # El fixture p31-40 tiene 3 referencias `Fallos:` que expanden a 8 citas
+    # fallo→fallo (medido con `spectre pdf citations`), repartidas en 2 de los
+    # 3 fallos.
+    assert Repo(conn).contar_citas_de_tomo(tid) == 8
+    con_citas = [f for f in fallos if Repo(conn).list_citas_de_fallo(f.id)]
+    assert len(con_citas) == 2
 
     # los jobs de las 7 etapas que hicieron falta (sin "descargar": el tomo
     # ya tenía pdf_path) terminaron hechos.

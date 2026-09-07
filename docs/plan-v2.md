@@ -231,16 +231,47 @@ pendiente: se puede empezar hoy.*
   Qué ve alguien que abre Spectre por primera vez y no tiene nada indexado.
   Hoy ve una tabla vacía y dos formularios.
 
+- [ ] **PR-B6 `[N]` Más resultados, con paginación**
+  Hoy la búsqueda muestra 10 fallos y no hay forma de ver más (el backend ya
+  acepta `k` hasta 50 — `/api/buscar`, `Query(10, ge=1, le=50)`). Traer
+  **hasta 20** y paginarlos de a 10, con un paginador **arriba y abajo** de la
+  lista, de modo que al llegar al final —o al principio— se pueda saltar a la
+  otra página sin scrollear de vuelta. Cambio de frontend (pedir `k=20`,
+  partir la lista, render del paginador); el backend no se toca salvo subir el
+  tope de `k` si 20 no alcanza.
+  *No depende de PR-A0:* es mecánico, no una decisión de rediseño — se puede
+  adelantar antes que B1–B5 (el estilo del paginador lo revisa PR-B3 cuando
+  llegue).
+  *Acepta:* una consulta con más de 10 fallos muestra el paginador; ir a la
+  página 2 muestra los resultados 11–20; el paginador está tanto arriba como
+  abajo de la lista y los filtros y la consulta sobreviven al cambio de
+  página.
+
 ---
 
 ## 6. Tanda C — Que valga más
 
-- [ ] **PR-C1 `[N]` Persistir las citas y mostrar quién cita a quién**
+- [x] **PR-C1 `[N]` Persistir las citas y mostrar quién cita a quién**
   Terminar el PR-10: guardar en `citas` durante el pipeline y agregar las
   citas *entrantes*. Con dos tomos ya hay grafo; con veinte es una función
   que ningún buscador gratuito da.
   *Acepta:* 887 citas para el Tomo 348 en la tabla; un fallo muestra quién lo
   cita dentro del corpus indexado.
+  *Hecho:* la etapa `estructurar` del pipeline corre `extraer_citas` (PR-10)
+  sobre el `texto_del_fallo` y vuelca a `citas` una fila por precedente
+  (`repo.insert_citas`, borrando antes las del fallo para que un reintento no
+  duplique). Sin migración ni estado nuevo. `GET /api/fallos/{cita}` devuelve
+  ahora `citas_entrantes` además de `citas_salientes` (`repo.citas_entrantes`
+  cruza `tomo_citado` con el número de tomo y `pagina_citada` con el rango de
+  páginas del fallo, excluye la auto-cita); la vista de fallo muestra "Citado
+  por" con carátula + cita clickeable. Las salientes se leen de la tabla, con
+  fallback al recálculo al vuelo para tomos indexados antes de PR-C1.
+  *Salvedad del número:* el criterio dice "887 citas en la tabla", pero 887 es
+  el conteo de *referencias* `Fallos:` (PR-10, `contar_referencias`); la tabla
+  guarda una fila **por precedente citado**, así que el Tomo 348 da ~2.006
+  filas (medido en PR-10). No se fuerza. Sobre el fixture chico
+  (`tomo348_cuerpo_p31-40.pdf`, en la suite rápida) el pipeline persiste 8
+  citas y el test lo fija. Detalle en `docs/qa/bitacora-PR-C1.md`.
 
 - [ ] **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
   La Secretaría de Jurisprudencia publica sumarios consultables por tomo y
@@ -359,14 +390,21 @@ filtros (con año por rango), el resaltado y los extractos están limpios, se
 busca por cita, y hay un set de evaluación con línea de base (recall@10 0,90 ·
 MRR 0,71) para medir lo que venga.
 
-Próximo: **PR-A1 de la Tanda B (PR-B1, reflow de párrafos)** no depende de
-nada; el resto de la Tanda B necesita una segunda observación con registro en
-vivo (ver §5 y la salvedad de PR-A0). O arrancar la **Tanda C** (PR-C1,
-persistir las citas). Kevin decide.
+En curso: **Tanda C.** La segunda sesión de observación no se pudo hacer
+todavía, así que la Tanda B sigue esperando y se avanza por C (decidido con
+Kevin el 07/09/2026). **PR-C1 cerrado** (citas salientes persistidas en el
+pipeline + citas entrantes en el endpoint y la vista de fallo). Próximo a
+elección: PR-C2 (sumarios oficiales + voces, arranca con spike), PR-C5
+(filtro por tipo de parte) o los `[V]` PR-C3 (reranker, ya tiene el set de
+PR-A6) / PR-C4 (memoria de la ingesta).
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
-con registro en vivo antes de arrancar B1–B3.
+con registro en vivo antes de arrancar B1–B3. Excepciones que no dependen de
+eso y se pueden adelantar: **PR-B1** (reflow de párrafos) y **PR-B6** (más
+resultados con paginación).
 
-Tandas C, D, E: sin arrancar. D espera la decisión D-16. E arranca por
+Tanda C: **en curso**. PR-C1 cerrado; el resto sin arrancar.
+
+Tandas D, E: sin arrancar. D espera la decisión D-16. E arranca por
 PR-E0 (spike) en cuanto se le quiera dar prioridad; D-17 ya está tomada.

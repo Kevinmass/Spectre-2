@@ -427,6 +427,59 @@ function renderCitasSalientes(citas) {
   return contenedor;
 }
 
+function renderCitasEntrantes(citas) {
+  const contenedor = document.createElement("div");
+  contenedor.className = "citas-entrantes";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Citado por";
+  contenedor.appendChild(h3);
+
+  if (!citas || citas.length === 0) {
+    const p = document.createElement("p");
+    p.className = "vacio";
+    p.textContent =
+      "Ningún otro fallo del corpus indexado cita a este. " +
+      "A medida que se sumen tomos pueden aparecer citas entrantes.";
+    contenedor.appendChild(p);
+    return contenedor;
+  }
+
+  const ul = document.createElement("ul");
+  for (const c of citas) {
+    const li = document.createElement("li");
+
+    const cita = document.createElement("button");
+    cita.type = "button";
+    cita.className = "cita";
+    cita.textContent = c.cita ? `Fallos: ${c.cita}` : "(sin cita)";
+    if (c.cita) {
+      cita.addEventListener("click", () => mostrarFallo(c.cita, null));
+    } else {
+      cita.disabled = true;
+    }
+    li.appendChild(cita);
+
+    if (c.caratula) {
+      const caratula = document.createElement("p");
+      caratula.className = "caratula";
+      caratula.textContent = c.caratula;
+      li.appendChild(caratula);
+    }
+
+    if (c.contexto) {
+      const contexto = document.createElement("p");
+      contexto.className = "cita-contexto";
+      contexto.textContent = c.contexto;
+      li.appendChild(contexto);
+    }
+
+    ul.appendChild(li);
+  }
+  contenedor.appendChild(ul);
+  return contenedor;
+}
+
 function renderFallo(fallo, paginaSolicitada) {
   const contenedor = document.getElementById("fallo-contenido");
   contenedor.textContent = "";
@@ -453,6 +506,7 @@ function renderFallo(fallo, paginaSolicitada) {
   contenedor.appendChild(secciones);
 
   contenedor.appendChild(renderCitasSalientes(fallo.citas_salientes));
+  contenedor.appendChild(renderCitasEntrantes(fallo.citas_entrantes));
 }
 
 function renderFalloNoEncontrado(contenedor, cita) {

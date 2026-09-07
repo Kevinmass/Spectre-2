@@ -394,16 +394,19 @@ button.cita:disabled {
   margin: 0;
 }
 
-.citas-salientes {
+.citas-salientes,
+.citas-entrantes {
   border-top: 1px solid var(--borde);
   padding-top: 1rem;
 }
 
-.citas-salientes h3 {
+.citas-salientes h3,
+.citas-entrantes h3 {
   font-size: 1rem;
 }
 
-.citas-salientes ul {
+.citas-salientes ul,
+.citas-entrantes ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -412,11 +415,17 @@ button.cita:disabled {
   gap: 0.6rem;
 }
 
-.citas-salientes li {
+.citas-salientes li,
+.citas-entrantes li {
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
+}
+
+.citas-entrantes li .caratula {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
 }
 
 .cita-contexto {

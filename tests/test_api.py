@@ -541,6 +541,10 @@ def test_fallo_detalle_devuelve_metadatos_secciones_y_citas(datos_tmp):
     assert cita_saliente["pagina_citada"] == 315
     assert "Acevedo" in cita_saliente["contexto"]
 
+    # sin ningún fallo que lo cite, las entrantes son una lista vacía (no falta
+    # la clave)
+    assert cuerpo["citas_entrantes"] == []
+
 
 def test_fallo_detalle_jueces_vacios_da_lista_vacia(datos_tmp):
     conn, repo = _base_migrada()
@@ -554,6 +558,69 @@ def test_fallo_detalle_jueces_vacios_da_lista_vacia(datos_tmp):
     cuerpo = r.json()
     assert cuerpo["jueces"] == []
     assert cuerpo["citas_salientes"] == []
+    assert cuerpo["citas_entrantes"] == []
+
+
+def test_fallo_detalle_citas_salientes_salen_de_la_tabla(datos_tmp):
+    """Desde PR-C1, si la tabla `citas` tiene filas para el fallo se leen de
+    ahí (no se recalculan del texto): el pipeline las persistió en `estructurar`.
+    """
+    conn, repo = _base_migrada()
+    _tomo_id, fallo_id = _fallo_con_secciones(
+        repo,
+        cita="348:100",
+        numero=348,
+        secciones=[("mayoria", None, "Texto del fallo, sin ninguna cita literal.")],
+        pagina_inicio=100,
+        pagina_fin=110,
+    )
+    repo.insert_citas(
+        fallo_id, [(311, 2478, "conf. Fallos: 311:2478, considerando 4°")]
+    )
+    conn.close()
+
+    cuerpo = _cliente().get("/api/fallos/348:100").json()
+    assert len(cuerpo["citas_salientes"]) == 1
+    assert cuerpo["citas_salientes"][0]["tomo_citado"] == 311
+    assert cuerpo["citas_salientes"][0]["pagina_citada"] == 2478
+
+
+def test_fallo_detalle_muestra_quien_lo_cita(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    citado = repo.insert_fallo(
+        tomo_id, "Citado c/ Estado", cita="348:100", pagina_inicio=100, pagina_fin=110
+    )
+    repo.conn.execute(
+        "INSERT INTO secciones (fallo_id, tipo, orden, texto)"
+        " VALUES (?, 'mayoria', 0, ?)",
+        (citado, "Fallo citado, sin citas propias."),
+    )
+    citante = repo.insert_fallo(
+        tomo_id, "Citante c/ Otro", cita="348:250", pagina_inicio=250, pagina_fin=260
+    )
+    repo.conn.execute(
+        "INSERT INTO secciones (fallo_id, tipo, orden, texto)"
+        " VALUES (?, 'mayoria', 0, ?)",
+        (citante, "Se remite a Fallos: 348:105 por análogas razones."),
+    )
+    repo.conn.commit()
+    repo.insert_citas(
+        citante, [(348, 105, "Se remite a Fallos: 348:105 por análogas razones.")]
+    )
+    conn.close()
+
+    cuerpo = _cliente().get("/api/fallos/348:100").json()
+    assert len(cuerpo["citas_entrantes"]) == 1
+    entrante = cuerpo["citas_entrantes"][0]
+    assert entrante["cita"] == "348:250"
+    assert entrante["caratula"] == "Citante c/ Otro"
+    assert entrante["pagina_citada"] == 105
+    assert "análogas razones" in entrante["contexto"]
+
+    # el que cita no tiene entrantes propias
+    otro = _cliente().get("/api/fallos/348:250").json()
+    assert otro["citas_entrantes"] == []
 
 
 def test_fallo_detalle_pdf_disponible_si_el_archivo_existe(datos_tmp, tmp_path):
