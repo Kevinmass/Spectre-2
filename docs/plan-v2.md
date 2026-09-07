@@ -126,7 +126,7 @@ pendiente: se puede empezar hoy.*
   (5–9), después 10/10. `total_pasajes` alimenta el contador. Detalle en
   `docs/qa/bitacora-PR-A1.md`.
 
-- [ ] **PR-A2 `[N]` Filtros en la pantalla**
+- [x] **PR-A2 `[N]` Filtros en la pantalla**
   Tribunal de origen, tipo de sección y "solo léxico" — el backend ya los
   acepta y los tiene testeados, esto es exponerlos. Más el año como **rango**
   (desde / hasta, o "últimos N años"): hoy `buscar_hibrido` toma `anio` como
@@ -138,6 +138,13 @@ pendiente: se puede empezar hoy.*
   *Nota:* los filtros por materia / rama del derecho / tipo de parte que
   también pidió la observación 01 **no** entran acá —no hay dato para eso
   todavía—: salen de PR-C2 (materia/rama) y PR-C5 (tipo de parte).
+  *Hecho:* fila de filtros en la pestaña Buscar (tribunal, sección, año
+  desde/hasta, "solo texto"), que se reaplican al cambiarlos. Backend:
+  `anio` → `anio_desde`/`anio_hasta` inclusivos en `filtrar_chunks`,
+  `buscar_hibrido`, `/api/buscar` y `spectre search buscar`. El tribunal
+  quedó como texto con match exacto (un picker necesita un endpoint de
+  facetas — va con PR-B3/B4). Medido sobre la base real: sección 10→1,
+  `anio_hasta=2010`→0. Detalle en `docs/qa/bitacora-PR-A2.md`.
 
 - [ ] **PR-A3 `[N]` Arreglar el resaltado**
   Lista de palabras vacías del castellano y límites de palabra en el regex.
@@ -320,9 +327,8 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0 y PR-A1 cerrados**. Próximo: **PR-A2** (filtros en la
-pantalla, con el año como rango). PR-A2 a PR-A6 no dependen de nada
-pendiente.
+Tanda A: **PR-A0, PR-A1 y PR-A2 cerrados**. Próximo: **PR-A3** (arreglar el
+resaltado). PR-A3 a PR-A6 no dependen de nada pendiente.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión

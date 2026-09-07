@@ -749,7 +749,8 @@ def _cmd_search_buscar(args: argparse.Namespace) -> int:
             vector,
             k=args.k,
             candidatos=args.candidatos,
-            anio=args.anio,
+            anio_desde=args.anio_desde,
+            anio_hasta=args.anio_hasta,
             tribunal_origen=args.tribunal,
             tipo_seccion=args.seccion,
         )
@@ -1113,7 +1114,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="candidatos por índice antes de fusionar y filtrar",
     )
-    p_search_buscar.add_argument("--anio", type=int, help="filtra por año del fallo")
+    p_search_buscar.add_argument(
+        "--anio-desde", type=int, metavar="AAAA", help="año del fallo, piso inclusivo"
+    )
+    p_search_buscar.add_argument(
+        "--anio-hasta", type=int, metavar="AAAA", help="año del fallo, techo inclusivo"
+    )
     p_search_buscar.add_argument(
         "--tribunal", help="filtra por tribunal de origen (match exacto)"
     )

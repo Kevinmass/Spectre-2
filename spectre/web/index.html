@@ -28,6 +28,37 @@
         />
         <button type="submit" disabled>Buscar</button>
       </form>
+
+      <div id="filtros" class="filtros">
+        <label>
+          Tribunal de origen
+          <input type="text" id="filtro-tribunal" autocomplete="off" placeholder="nombre exacto" />
+        </label>
+        <label>
+          Sección
+          <select id="filtro-seccion">
+            <option value="">todas</option>
+            <option value="mayoria">mayoría</option>
+            <option value="voto">voto</option>
+            <option value="disidencia">disidencia</option>
+            <option value="dictamen">dictamen</option>
+          </select>
+        </label>
+        <label>
+          Año desde
+          <input type="number" id="filtro-anio-desde" min="1863" max="2100" step="1" />
+        </label>
+        <label>
+          Año hasta
+          <input type="number" id="filtro-anio-hasta" min="1863" max="2100" step="1" />
+        </label>
+        <label class="filtro-check">
+          <input type="checkbox" id="filtro-solo-lexico" />
+          Solo texto, sin buscar por significado
+        </label>
+        <button type="button" id="filtros-limpiar" class="filtros-limpiar">Limpiar filtros</button>
+      </div>
+
       <p id="buscar-aviso" class="vacio">Cargando…</p>
       <ol id="resultados" class="resultados"></ol>
     </section>

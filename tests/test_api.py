@@ -250,6 +250,31 @@ def test_buscar_agrupa_los_pasajes_de_un_fallo_en_un_solo_resultado(datos_tmp):
     assert tipos == {"mayoria", "disidencia"}
 
 
+def test_buscar_filtra_por_seccion_y_tribunal_desde_la_api(datos_tmp):
+    conn, repo = _base_migrada()
+    _fallo_con_seccion_y_chunks(
+        repo,
+        cita="348:1",
+        textos=["voto en disidencia sobre la cuestión federal"],
+        tipo="disidencia",
+        tribunal_origen="Cámara Federal de La Plata",
+    )
+    conn.close()
+
+    def _citas(**extra):
+        params = {"q": "cuestión federal", "solo_lexico": "true", **extra}
+        cuerpo = _cliente().get("/api/buscar", params=params).json()
+        return [r["cita"] for r in cuerpo["resultados"]]
+
+    assert _citas() == ["348:1"]
+    assert _citas(seccion="disidencia") == ["348:1"]
+    assert _citas(seccion="mayoria") == []
+    assert _citas(tribunal="Cámara Federal de La Plata") == ["348:1"]
+    assert _citas(tribunal="Otra Cámara") == []
+    # un filtro de tribunal en blanco no restringe nada
+    assert _citas(tribunal="   ") == ["348:1"]
+
+
 def test_buscar_sin_resultados_da_lista_vacia_no_error(datos_tmp):
     conn, repo = _base_migrada()
     _fallo_con_seccion_y_chunks(repo, cita="348:1", textos=["un texto sin relación"])
@@ -263,7 +288,7 @@ def test_buscar_sin_resultados_da_lista_vacia_no_error(datos_tmp):
     assert r.json()["resultados"] == []
 
 
-def test_buscar_filtra_por_anio(datos_tmp):
+def test_buscar_filtra_por_rango_de_anios(datos_tmp):
     conn, repo = _base_migrada()
     _fallo_con_seccion_y_chunks(
         repo,
@@ -273,21 +298,14 @@ def test_buscar_filtra_por_anio(datos_tmp):
     )
     conn.close()
 
-    sin_filtro = _cliente().get(
-        "/api/buscar",
-        params={"q": "responsabilidad civil médica", "solo_lexico": "true"},
-    )
-    assert len(sin_filtro.json()["resultados"]) == 1
+    def _buscar(**extra):
+        params = {"q": "responsabilidad civil médica", "solo_lexico": "true", **extra}
+        return _cliente().get("/api/buscar", params=params).json()["resultados"]
 
-    con_filtro = _cliente().get(
-        "/api/buscar",
-        params={
-            "q": "responsabilidad civil médica",
-            "solo_lexico": "true",
-            "anio": 2024,
-        },
-    )
-    assert con_filtro.json()["resultados"] == []
+    assert len(_buscar()) == 1
+    assert len(_buscar(anio_desde=2015, anio_hasta=2019)) == 1  # cae dentro
+    assert _buscar(anio_desde=2020) == []  # piso por encima
+    assert _buscar(anio_hasta=2017) == []  # techo por debajo
 
 
 def test_buscar_modo_hibrido_con_modelo_falso(monkeypatch, datos_tmp):

@@ -589,24 +589,31 @@ class Repo:
         self,
         ids: Iterable[int],
         *,
-        anio: int | None = None,
+        anio_desde: int | None = None,
+        anio_hasta: int | None = None,
         tribunal_origen: str | None = None,
         tipo_seccion: str | None = None,
     ) -> set[int]:
-        """De `ids`, cuáles cumplen los filtros pedidos (año de `fallos.fecha`,
-        tribunal de origen exacto, tipo de sección exacto). Sin filtros, es
-        simplemente `set(ids)` — para búsqueda híbrida (PR-15), que filtra
-        *después* de traer candidatos de cada índice: ni LanceDB ni FTS5 saben
-        de año/tribunal/sección, esos metadatos viven en `fallos`/`secciones`.
+        """De `ids`, cuáles cumplen los filtros pedidos (rango de años de
+        `fallos.fecha`, tribunal de origen exacto, tipo de sección exacto).
+        `anio_desde`/`anio_hasta` son inclusivos y se pueden usar sueltos (solo
+        piso o solo techo); un fallo sin fecha no pasa ningún filtro de año.
+        Sin filtros, es simplemente `set(ids)` — para búsqueda híbrida (PR-15),
+        que filtra *después* de traer candidatos de cada índice: ni LanceDB ni
+        FTS5 saben de año/tribunal/sección, esos metadatos viven en
+        `fallos`/`secciones`.
         """
         ids = list(ids)
         if not ids:
             return set()
         condiciones = []
         params: list[object] = []
-        if anio is not None:
-            condiciones.append("substr(f.fecha, 1, 4) = ?")
-            params.append(str(anio))
+        if anio_desde is not None:
+            condiciones.append("substr(f.fecha, 1, 4) >= ?")
+            params.append(f"{anio_desde:04d}")
+        if anio_hasta is not None:
+            condiciones.append("substr(f.fecha, 1, 4) <= ?")
+            params.append(f"{anio_hasta:04d}")
         if tribunal_origen is not None:
             condiciones.append("f.tribunal_origen = ?")
             params.append(tribunal_origen)

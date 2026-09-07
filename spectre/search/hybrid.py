@@ -63,7 +63,8 @@ def buscar_hibrido(
     *,
     k: int = 10,
     candidatos: int = 50,
-    anio: int | None = None,
+    anio_desde: int | None = None,
+    anio_hasta: int | None = None,
     tribunal_origen: str | None = None,
     tipo_seccion: str | None = None,
 ) -> list[ResultadoHibrido]:
@@ -82,7 +83,8 @@ def buscar_hibrido(
     candidatos_ids = {r.chunk_id for r in lexicos} | {v.chunk_id for v in vecinos}
     permitidos = Repo(conn).filtrar_chunks(
         candidatos_ids,
-        anio=anio,
+        anio_desde=anio_desde,
+        anio_hasta=anio_hasta,
         tribunal_origen=tribunal_origen,
         tipo_seccion=tipo_seccion,
     )

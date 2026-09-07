@@ -148,8 +148,15 @@ def test_buscar_hibrido_filtra_por_anio(conn, tmp_path):
     idx = IndiceVectorial(tmp_path / "vec", dimension=2)
     idx.upsert([(viejo, [1.0, 0.0], "m"), (nuevo, [1.0, 0.0], "m")])
 
-    resultados = buscar_hibrido(conn, idx, "prescripción penal", [1.0, 0.0], anio=2024)
+    resultados = buscar_hibrido(
+        conn, idx, "prescripción penal", [1.0, 0.0], anio_desde=2024
+    )
     assert [r.chunk_id for r in resultados] == [nuevo]
+
+    resultados = buscar_hibrido(
+        conn, idx, "prescripción penal", [1.0, 0.0], anio_hasta=2020
+    )
+    assert [r.chunk_id for r in resultados] == [viejo]
 
 
 def test_buscar_hibrido_filtra_por_tribunal_y_seccion(conn, tmp_path):
