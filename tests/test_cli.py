@@ -434,6 +434,52 @@ def test_sumarios_status_lista_conteos(capsys, datos_tmp):
     assert "tomo 348: 1 sumario(s)" in out
 
 
+# --- partes reclasificar / status (PR-C5) ------------------------------- #
+
+
+def _base_con_fallos(caratulas):
+    from spectre.db import Repo, connect, migrate
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    migrate(conn)
+    repo = Repo(conn)
+    tomo_id = repo.insert_tomo(348, estado="indexado")
+    for i, car in enumerate(caratulas, 1):
+        repo.insert_fallo(tomo_id, car, cita=f"348:{i}", pagina_inicio=i)
+    conn.close()
+
+
+def test_partes_reclasificar_imprime_cobertura(capsys, datos_tmp):
+    _base_con_fallos(
+        ["Pérez, Juan c/ Estado Nacional", "Acme S.A. c/ AFIP s/ repetición"]
+    )
+    assert main(["partes", "reclasificar"]) == 0
+    out = capsys.readouterr().out
+    assert "fallos recorridos" in out
+    assert "con actor clasificado      2" in out
+    assert "estado" in out and "persona_fisica" in out and "empresa" in out
+
+
+def test_partes_reclasificar_tomo_inexistente_revienta(datos_tmp):
+    _base_con_fallos(["A c/ B"])
+    with pytest.raises(SystemExit) as exc:
+        main(["partes", "reclasificar", "--tomo", "999"])
+    assert "no existe el tomo 999" in str(exc.value)
+
+
+def test_partes_status(capsys, datos_tmp):
+    _base_con_fallos(["González, Ana c/ Provincia de Córdoba"])
+    main(["partes", "reclasificar"])
+    capsys.readouterr()
+    assert main(["partes", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "fallos: 1" in out
+    assert "persona_fisica: 1" in out
+    assert "estado: 1" in out
+
+
 # --- ingest (PR-19) ------------------------------------------------------- #
 
 

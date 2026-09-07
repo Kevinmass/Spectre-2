@@ -47,7 +47,16 @@ _TOMO_CAMPOS_MUTABLES = frozenset(
 #: los fija el segmentador); esto es lo que llena PR-19 al estructurar (fecha
 #: / jueces / tribunal / recurso).
 _FALLO_CAMPOS_MUTABLES = frozenset(
-    {"fecha", "tribunal_origen", "tipo_recurso", "jueces"}
+    {
+        "fecha",
+        "tribunal_origen",
+        "tipo_recurso",
+        "jueces",
+        "actor",
+        "actor_tipo",
+        "demandado",
+        "demandado_tipo",
+    }
 )
 
 
@@ -163,6 +172,14 @@ class Fallo:
     tribunal_origen: str | None
     tipo_recurso: str | None
     jueces: str | None
+    #: PR-C5: string crudo de cada parte (de la carátula) y su tipo
+    #: (persona_fisica / empresa / estado / organismo, o None). El orden de
+    #: estos campos sigue al de las columnas que agrega la migración 0006, para
+    #: que `Fallo(**row)` con `SELECT *` mapee bien.
+    actor: str | None = None
+    actor_tipo: str | None = None
+    demandado: str | None = None
+    demandado_tipo: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -504,6 +521,58 @@ class Repo:
             )
         ]
 
+    def iter_fallos(self, *, tomo_id: int | None = None) -> list[Fallo]:
+        """Todos los fallos (o los de un tomo), para recorridos que no dependen
+        del tomo — el backfill de partes de PR-C5."""
+        if tomo_id is not None:
+            return self.list_fallos(tomo_id)
+        return [
+            Fallo(**row)
+            for row in self.conn.execute(
+                "SELECT * FROM fallos ORDER BY tomo_id, pagina_inicio, id"
+            )
+        ]
+
+    def cobertura_partes(self, *, tomo_id: int | None = None) -> dict:
+        """Cobertura de la clasificación de partes (PR-C5): total de fallos,
+        cuántos tienen actor / demandado clasificado, y el reparto por tipo
+        contando cada parte (actor + demandado) por separado."""
+        filtro = " WHERE tomo_id = ?" if tomo_id is not None else ""
+        args = (tomo_id,) if tomo_id is not None else ()
+        total = int(
+            self.conn.execute(f"SELECT count(*) FROM fallos{filtro}", args).fetchone()[
+                0
+            ]
+        )
+        con_actor = int(
+            self.conn.execute(
+                f"SELECT count(*) FROM fallos{filtro}{' AND' if filtro else ' WHERE'}"
+                " actor_tipo IS NOT NULL",
+                args,
+            ).fetchone()[0]
+        )
+        con_dem = int(
+            self.conn.execute(
+                f"SELECT count(*) FROM fallos{filtro}{' AND' if filtro else ' WHERE'}"
+                " demandado_tipo IS NOT NULL",
+                args,
+            ).fetchone()[0]
+        )
+        por_tipo: dict[str, int] = {}
+        for col in ("actor_tipo", "demandado_tipo"):
+            for row in self.conn.execute(
+                f"SELECT {col}, count(*) FROM fallos{filtro}"
+                f"{' AND' if filtro else ' WHERE'} {col} IS NOT NULL GROUP BY {col}",
+                args,
+            ):
+                por_tipo[row[0]] = por_tipo.get(row[0], 0) + int(row[1])
+        return {
+            "total": total,
+            "con_actor_tipo": con_actor,
+            "con_demandado_tipo": con_dem,
+            "por_tipo": por_tipo,
+        }
+
     def actualizar_fallo(self, fallo_id: int, **campos: object) -> None:
         """Actualiza los metadatos estructurados de un fallo (PR-19: la etapa
         `estructurar`). Columna inexistente o no mutable → `ValueError`, igual
@@ -659,15 +728,18 @@ class Repo:
         tipo_seccion: str | None = None,
         voz: str | None = None,
         materia: str | None = None,
+        parte_tipo: str | None = None,
     ) -> set[int]:
         """De `ids`, cuáles cumplen los filtros pedidos (rango de años de
         `fallos.fecha`, tribunal de origen exacto, tipo de sección exacto, voz
-        del tesauro de la CSJN, materia de la Secretaría).
+        del tesauro de la CSJN, materia de la Secretaría, tipo de parte).
         `anio_desde`/`anio_hasta` son inclusivos y se pueden usar sueltos (solo
         piso o solo techo); un fallo sin fecha no pasa ningún filtro de año.
         `voz` / `materia` solo dejan pasar fallos con un sumario oficial cargado
         (PR-C2b) que traiga esa voz / esa materia — la comparación de `voz` es
-        en mayúsculas (así las guarda la CSJN). Sin filtros, es simplemente
+        en mayúsculas (así las guarda la CSJN). `parte_tipo` (PR-C5) deja pasar
+        el fallo si **alguna** de sus partes (actor o demandado) es de ese tipo.
+        Sin filtros, es simplemente
         `set(ids)` — para búsqueda híbrida (PR-15), que filtra *después* de
         traer candidatos de cada índice: ni LanceDB ni FTS5 saben de estos
         metadatos, viven en `fallos`/`secciones`/`sumarios`.
@@ -700,6 +772,9 @@ class Repo:
                 "c.fallo_id IN (SELECT fallo_id FROM sumarios WHERE materia = ?)"
             )
             params.append(materia)
+        if parte_tipo is not None:
+            condiciones.append("(f.actor_tipo = ? OR f.demandado_tipo = ?)")
+            params.extend([parte_tipo, parte_tipo])
         where = (" AND " + " AND ".join(condiciones)) if condiciones else ""
         marcadores = ", ".join("?" * len(ids))
         sql = (

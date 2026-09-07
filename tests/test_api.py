@@ -1020,3 +1020,99 @@ def test_sync_sumarios_lanza_la_tarea_en_segundo_plano(monkeypatch, datos_tmp):
     assert r.status_code == 202
     assert r.json()["numero"] == 348
     assert llamadas == [348]
+
+
+# --- filtro por tipo de parte (PR-C5) ---------------------------------- #
+
+
+def _fallo_parte(repo, *, cita, textos, actor_tipo, demandado_tipo):
+    fallo_id = _fallo_con_seccion_y_chunks(repo, cita=cita, textos=textos)
+    repo.actualizar_fallo(
+        fallo_id,
+        actor="Actor",
+        actor_tipo=actor_tipo,
+        demandado="Demandado",
+        demandado_tipo=demandado_tipo,
+    )
+    return fallo_id
+
+
+def test_buscar_filtra_por_tipo_de_parte(datos_tmp):
+    conn, repo = _base_migrada()
+    _fallo_parte(
+        repo,
+        cita="348:1",
+        textos=["responsabilidad del Estado por su actividad lícita"],
+        actor_tipo="empresa",
+        demandado_tipo="estado",
+    )
+    _fallo_parte(
+        repo,
+        cita="348:2",
+        textos=["responsabilidad del Estado en otro caso distinto"],
+        actor_tipo="persona_fisica",
+        demandado_tipo="persona_fisica",
+    )
+    conn.close()
+
+    def _citas(**extra):
+        params = {"q": "responsabilidad del Estado", "solo_lexico": "true"}
+        params.update(extra)
+        return [
+            r["cita"]
+            for r in _cliente().get("/api/buscar", params=params).json()["resultados"]
+        ]
+
+    assert set(_citas()) == {"348:1", "348:2"}
+    assert _citas(parte="estado") == ["348:1"]
+    assert _citas(parte="empresa") == ["348:1"]
+    assert _citas(parte="persona_fisica") == ["348:2"]
+    assert _citas(parte="organismo") == []
+
+
+def test_buscar_parte_invalida_es_error(datos_tmp):
+    r = _cliente().get("/api/buscar", params={"q": "algo", "parte": "no-existe"})
+    assert r.status_code == 422
+
+
+def test_fallo_detalle_incluye_partes_y_tipos(datos_tmp):
+    conn, repo = _base_migrada()
+    _tomo_id, fallo_id = _fallo_con_secciones(
+        repo, cita="348:1", secciones=[("mayoria", None, "texto")]
+    )
+    repo.actualizar_fallo(
+        fallo_id,
+        actor="Y.P.F. S.A.",
+        actor_tipo="empresa",
+        demandado="Provincia de Mendoza",
+        demandado_tipo="estado",
+    )
+    conn.close()
+
+    cuerpo = _cliente().get("/api/fallos/348:1").json()
+    assert cuerpo["actor"] == "Y.P.F. S.A."
+    assert cuerpo["actor_tipo"] == "empresa"
+    assert cuerpo["demandado"] == "Provincia de Mendoza"
+    assert cuerpo["demandado_tipo"] == "estado"
+
+
+def test_reclasificar_partes_endpoint(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348, estado="indexado")
+    repo.insert_fallo(
+        tomo_id, "Pérez, Juan c/ Estado Nacional", cita="348:1", pagina_inicio=1
+    )
+    repo.insert_fallo(tomo_id, "Acme S.A. c/ AFIP", cita="348:2", pagina_inicio=2)
+    conn.close()
+
+    r = _cliente().post("/api/fallos/reclasificar-partes")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["fallos"] == 2
+    assert cuerpo["con_actor_tipo"] == 2
+    assert cuerpo["por_tipo"]["estado"] == 2
+
+    # y quedó persistido
+    detalle = _cliente().get("/api/fallos/348:1").json()
+    assert detalle["actor_tipo"] == "persona_fisica"
+    assert detalle["demandado_tipo"] == "estado"

@@ -77,6 +77,7 @@ from spectre.db import Repo, Tomo, connect, migrate
 from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
 from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
+from spectre.partes import reclasificar_partes
 from spectre.search import PALABRAS_VACIAS, agrupar_por_fallo, buscar_hibrido
 from spectre.sumarios import sincronizar_tomo
 
@@ -280,6 +281,8 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         seccion: Literal["mayoria", "voto", "disidencia", "dictamen"] | None = None,
         voz: str | None = None,
         materia: str | None = None,
+        parte: Literal["persona_fisica", "empresa", "estado", "organismo"]
+        | None = None,
         solo_lexico: bool = False,
     ) -> dict:
         consulta = q.strip()
@@ -325,6 +328,7 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 tipo_seccion=seccion,
                 voz=voz,
                 materia=materia,
+                parte_tipo=parte,
             )
             agrupados = agrupar_por_fallo(conn, fusionados, limite=k)
 
@@ -430,6 +434,10 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 "pagina_fin": fallo.pagina_fin,
                 "offset_pagina": tomo.offset_pagina if tomo else None,
                 "pdf_disponible": bool(pdf_path and pdf_path.is_file()),
+                "actor": fallo.actor,
+                "actor_tipo": fallo.actor_tipo,
+                "demandado": fallo.demandado,
+                "demandado_tipo": fallo.demandado_tipo,
                 "sumarios": [
                     {
                         "texto": s.texto,
@@ -578,6 +586,27 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
 
         background_tasks.add_task(_sincronizar_sumarios_en_fondo, s.db_path, numero)
         return {"numero": numero, "sumarios_sync": "iniciada"}
+
+    @app.post("/api/fallos/reclasificar-partes")
+    def reclasificar_partes_endpoint() -> dict:
+        """Recalcula `actor` / `demandado` y su tipo para todo el corpus a
+        partir de las carátulas ya en la base (PR-C5). Es instantáneo (no abre
+        PDFs, no hay red), así que corre síncrono y devuelve el resumen de
+        cobertura. Reejecutable."""
+        s = get_settings()
+        s.ensure_dirs()
+        conn = connect(s.db_path)
+        try:
+            migrate(conn)
+            resumen = reclasificar_partes(conn)
+        finally:
+            conn.close()
+        return {
+            "fallos": resumen.fallos,
+            "con_actor_tipo": resumen.con_actor_tipo,
+            "con_demandado_tipo": resumen.con_demandado_tipo,
+            "por_tipo": resumen.por_tipo,
+        }
 
     # Al final: StaticFiles(html=True) sirve index.html en "/" y es un
     # catch-all, así que las rutas de la API tienen que quedar registradas

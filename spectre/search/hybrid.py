@@ -69,6 +69,7 @@ def buscar_hibrido(
     tipo_seccion: str | None = None,
     voz: str | None = None,
     materia: str | None = None,
+    parte_tipo: str | None = None,
 ) -> list[ResultadoHibrido]:
     """Fusiona léxico + vectorial y devuelve los `k` mejores `ResultadoHibrido`.
 
@@ -91,6 +92,7 @@ def buscar_hibrido(
         tipo_seccion=tipo_seccion,
         voz=voz,
         materia=materia,
+        parte_tipo=parte_tipo,
     )
 
     lista_lex = [r.chunk_id for r in lexicos if r.chunk_id in permitidos]

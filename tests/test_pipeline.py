@@ -206,6 +206,12 @@ def test_pipeline_completo_sobre_el_fixture_real(conn):
     con_citas = [f for f in fallos if Repo(conn).list_citas_de_fallo(f.id)]
     assert len(con_citas) == 2
 
+    # PR-C5: `estructurar` también persistió las partes y su tipo. "348:34" es
+    # "Gobierno de la Ciudad de Buenos Aires c/ ..." → demandado o actor estado.
+    gcba = fallos[1]
+    assert gcba.actor or gcba.demandado
+    assert "estado" in (gcba.actor_tipo, gcba.demandado_tipo)
+
     # los jobs de las 7 etapas que hicieron falta (sin "descargar": el tomo
     # ya tenía pdf_path) terminaron hechos.
     tipos_hechos = {

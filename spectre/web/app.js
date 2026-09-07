@@ -7,6 +7,13 @@ const ETIQUETAS_SECCION = {
   dictamen: "Dictamen",
 };
 
+const ETIQUETAS_PARTE = {
+  persona_fisica: "persona física",
+  empresa: "empresa",
+  estado: "Estado",
+  organismo: "organismo público",
+};
+
 // Palabras vacías del castellano (§2.3 del plan v2): artículos,
 // preposiciones, conjunciones, pronombres y determinantes. No se resaltan —
 // antes "del", "por" o "sin" se marcaban como si fueran el término buscado.
@@ -349,6 +356,7 @@ function parametrosBusqueda(consulta) {
   const anioHasta = document.getElementById("filtro-anio-hasta").value;
   const voz = document.getElementById("filtro-voz").value.trim();
   const materia = document.getElementById("filtro-materia").value;
+  const parte = document.getElementById("filtro-parte").value;
   const soloLexico = document.getElementById("filtro-solo-lexico").checked;
   if (tribunal) params.set("tribunal", tribunal);
   if (seccion) params.set("seccion", seccion);
@@ -356,6 +364,7 @@ function parametrosBusqueda(consulta) {
   if (anioHasta) params.set("anio_hasta", anioHasta);
   if (voz) params.set("voz", voz);
   if (materia) params.set("materia", materia);
+  if (parte) params.set("parte", parte);
   if (soloLexico) params.set("solo_lexico", "true");
   return params;
 }
@@ -395,6 +404,13 @@ async function buscar(consulta) {
 
 // --- vista de fallo (PR-22) ------------------------------------------- //
 
+function parteConTipo(nombre, tipo) {
+  if (!nombre) {
+    return "—";
+  }
+  return tipo ? `${nombre} (${ETIQUETAS_PARTE[tipo] || tipo})` : nombre;
+}
+
 function renderMetadatos(fallo) {
   const dl = document.createElement("dl");
   dl.className = "metadatos";
@@ -404,6 +420,13 @@ function renderMetadatos(fallo) {
     ["Tipo de recurso", fallo.tipo_recurso || "—"],
     ["Jueces", fallo.jueces.length > 0 ? fallo.jueces.join(", ") : "—"],
   ];
+  if (fallo.actor || fallo.demandado) {
+    filas.push([
+      "Partes",
+      `${parteConTipo(fallo.actor, fallo.actor_tipo)} c/ ` +
+        `${parteConTipo(fallo.demandado, fallo.demandado_tipo)}`,
+    ]);
+  }
   for (const [etiqueta, valor] of filas) {
     const dt = document.createElement("dt");
     dt.textContent = etiqueta;
@@ -706,6 +729,33 @@ async function sincronizarSumarios(numero, boton) {
   }
 }
 
+async function reclasificarPartes(boton) {
+  const aviso = document.getElementById("biblioteca-aviso");
+  aviso.hidden = false;
+  aviso.textContent = "Clasificando las partes de los fallos indexados…";
+  boton.disabled = true;
+  try {
+    const resp = await fetch("/api/fallos/reclasificar-partes", {
+      method: "POST",
+    });
+    if (!resp.ok) {
+      throw new Error(await _detalleDeError(resp));
+    }
+    const r = await resp.json();
+    const clasificadas = r.con_actor_tipo + r.con_demandado_tipo;
+    const reparto = Object.entries(r.por_tipo)
+      .map(([t, n]) => `${ETIQUETAS_PARTE[t] || t}: ${n}`)
+      .join(" · ");
+    aviso.textContent =
+      `Listo: ${clasificadas} partes clasificadas sobre ${r.fallos} fallos` +
+      (reparto ? ` (${reparto}).` : ".");
+  } catch (err) {
+    aviso.textContent = `No se pudo clasificar las partes (${err.message}).`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 // --- filtro por voz: autocompletado contra /api/voces (tabla local) ------ //
 
 let _debounceVoces = null;
@@ -795,7 +845,7 @@ document.getElementById("form-buscar").addEventListener("submit", (ev) => {
 });
 
 for (const filtro of document.querySelectorAll(
-  "#filtro-tribunal, #filtro-seccion, #filtro-anio-desde, #filtro-anio-hasta, #filtro-voz, #filtro-materia, #filtro-solo-lexico",
+  "#filtro-tribunal, #filtro-seccion, #filtro-anio-desde, #filtro-anio-hasta, #filtro-voz, #filtro-materia, #filtro-parte, #filtro-solo-lexico",
 )) {
   filtro.addEventListener("change", ejecutarBusqueda);
 }
@@ -813,6 +863,7 @@ document.getElementById("filtros-limpiar").addEventListener("click", () => {
   document.getElementById("filtro-anio-hasta").value = "";
   document.getElementById("filtro-voz").value = "";
   document.getElementById("filtro-materia").value = "";
+  document.getElementById("filtro-parte").value = "";
   document.getElementById("filtro-solo-lexico").checked = false;
   ejecutarBusqueda();
 });
@@ -856,6 +907,11 @@ document.getElementById("form-sync-sumarios").addEventListener("submit", (ev) =>
     return;
   }
   sincronizarSumarios(numero, form.querySelector("button"));
+});
+
+document.getElementById("form-clasificar-partes").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  reclasificarPartes(ev.target.querySelector("button"));
 });
 
 cargarEstado();

@@ -55,6 +55,7 @@ MIGRACIONES = [
     "0003_chunks_fts",
     "0004_tomos_estado_check",
     "0005_sumarios",
+    "0006_partes",
 ]
 
 
@@ -911,6 +912,87 @@ def test_contar_sumarios_de_tomo(repo):
         fallo_id, [(0, "a", [], None, None), (1, "b", [], None, None)]
     )
     assert repo.contar_sumarios_de_tomo(tomo_id) == 2
+
+
+# --- partes / tipo de parte (PR-C5) -------------------------------------- #
+
+
+def _fallo_con_partes(repo, cita, *, actor_tipo, demandado_tipo, numero=None):
+    if numero is None:
+        numero = repo.conn.execute("SELECT count(*) FROM tomos").fetchone()[0] + 1
+    tomo_id = repo.insert_tomo(numero)
+    fallo_id = repo.insert_fallo(
+        tomo_id, "A c/ B", cita=cita, pagina_inicio=int(cita.split(":")[1])
+    )
+    cur = repo.conn.execute(
+        "INSERT INTO secciones (fallo_id, tipo, orden) VALUES (?, 'mayoria', 0)",
+        (fallo_id,),
+    )
+    repo.conn.commit()
+    repo.insert_chunks(fallo_id, [(cur.lastrowid, 0, "texto", None)])
+    repo.actualizar_fallo(
+        fallo_id,
+        actor="Actor X",
+        actor_tipo=actor_tipo,
+        demandado="Demandado Y",
+        demandado_tipo=demandado_tipo,
+    )
+    return tomo_id, fallo_id, repo.list_chunks_de_fallo(fallo_id)[0].id
+
+
+def test_actualizar_fallo_persiste_partes_y_tipos(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    repo.actualizar_fallo(
+        fid,
+        actor="Pérez, Juan",
+        actor_tipo="persona_fisica",
+        demandado="Estado Nacional",
+        demandado_tipo="estado",
+    )
+    f = repo.get_fallo(fid)
+    assert (f.actor, f.actor_tipo) == ("Pérez, Juan", "persona_fisica")
+    assert (f.demandado, f.demandado_tipo) == ("Estado Nacional", "estado")
+
+
+def test_actualizar_fallo_rechaza_tipo_fuera_de_dominio(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1")
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.actualizar_fallo(fid, actor_tipo="ninguno")
+
+
+def test_filtrar_chunks_por_tipo_de_parte(repo):
+    _t1, _f1, c1 = _fallo_con_partes(
+        repo, "348:1", actor_tipo="empresa", demandado_tipo="estado"
+    )
+    _t2, _f2, c2 = _fallo_con_partes(
+        repo, "348:2", actor_tipo="persona_fisica", demandado_tipo="persona_fisica"
+    )
+    ids = [c1, c2]
+    assert repo.filtrar_chunks(ids, parte_tipo="estado") == {c1}
+    assert repo.filtrar_chunks(ids, parte_tipo="empresa") == {c1}  # match por actor
+    assert repo.filtrar_chunks(ids, parte_tipo="persona_fisica") == {c2}
+    assert repo.filtrar_chunks(ids, parte_tipo="organismo") == set()
+
+
+def test_cobertura_partes(repo):
+    _fallo_con_partes(repo, "348:1", actor_tipo="empresa", demandado_tipo="estado")
+    _fallo_con_partes(repo, "349:1", actor_tipo="persona_fisica", demandado_tipo=None)
+    cob = repo.cobertura_partes()
+    assert cob["total"] == 2
+    assert cob["con_actor_tipo"] == 2
+    assert cob["con_demandado_tipo"] == 1
+    assert cob["por_tipo"] == {"empresa": 1, "estado": 1, "persona_fisica": 1}
+
+
+def test_iter_fallos_todos_y_por_tomo(repo):
+    t1 = repo.insert_tomo(348)
+    t2 = repo.insert_tomo(349)
+    repo.insert_fallo(t1, "A c/ B", cita="348:1", pagina_inicio=1)
+    repo.insert_fallo(t2, "C c/ D", cita="349:1", pagina_inicio=1)
+    assert len(repo.iter_fallos()) == 2
+    assert [f.cita for f in repo.iter_fallos(tomo_id=t1)] == ["348:1"]
 
 
 # --- auto_commit=False (PR-19: uso dentro de un handler del job runner) - #

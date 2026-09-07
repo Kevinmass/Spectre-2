@@ -35,6 +35,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from spectre.corpus.fallo.partes import clasificar_parte
 from spectre.corpus.fallo.segmenter import _linea_es_caratula
 from spectre.corpus.pdf.clean import limpiar
 
@@ -132,7 +133,9 @@ _PROSA = {
 
 @dataclass(frozen=True, slots=True)
 class MetadatosFallo:
-    """Lo que se pudo leer del texto del fallo. `None` / `()` = no encontrado."""
+    """Lo que se pudo leer del texto del fallo. `None` / `()` = no encontrado.
+    `actor_tipo` / `demandado_tipo` (PR-C5) clasifican cada parte en
+    persona_fisica / empresa / estado / organismo, o `None` si no se pudo."""
 
     fecha: str | None  # ISO "2025-02-06"
     jueces: tuple[str, ...]
@@ -140,6 +143,8 @@ class MetadatosFallo:
     tribunal_origen: str | None
     actor: str | None
     demandado: str | None
+    actor_tipo: str | None = None
+    demandado_tipo: str | None = None
 
 
 def _iso(dia: str, mes: str, anio: str) -> str | None:
@@ -262,6 +267,8 @@ def extraer_metadatos(texto: str, *, caratula: str) -> MetadatosFallo:
         tribunal_origen=_tribunal_origen(texto),
         actor=actor,
         demandado=demandado,
+        actor_tipo=clasificar_parte(actor),
+        demandado_tipo=clasificar_parte(demandado),
     )
 
 

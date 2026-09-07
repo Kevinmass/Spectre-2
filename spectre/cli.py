@@ -755,6 +755,7 @@ def _cmd_search_buscar(args: argparse.Namespace) -> int:
             tipo_seccion=args.seccion,
             voz=args.voz,
             materia=args.materia,
+            parte_tipo=args.parte,
         )
         print(f"consulta: {args.consulta!r}  ({len(resultados)} resultados)\n")
         for r in resultados:
@@ -901,6 +902,63 @@ def _cmd_sumarios_status(args: argparse.Namespace) -> int:
             print(f"  tomo {t.numero}: {n} sumario(s)")
     finally:
         conn.close()
+    return 0
+
+
+def _cmd_partes_reclasificar(args: argparse.Namespace) -> int:
+    from spectre.partes import reclasificar_partes
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    try:
+        migrate(conn)
+        try:
+            resumen = reclasificar_partes(conn, tomo=args.tomo)
+        except ValueError as e:
+            raise SystemExit(str(e)) from e
+    finally:
+        conn.close()
+
+    sin_clasificar = 2 * resumen.fallos - (
+        resumen.con_actor_tipo + resumen.con_demandado_tipo
+    )
+    filas = [
+        ("fallos recorridos", resumen.fallos),
+        ("con actor clasificado", resumen.con_actor_tipo),
+        ("con demandado clasificado", resumen.con_demandado_tipo),
+        ("partes sin clasificar", sin_clasificar),
+    ]
+    for tipo, n in sorted(resumen.por_tipo.items()):
+        filas.append((f"  {tipo}", n))
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
+def _cmd_partes_status(args: argparse.Namespace) -> int:
+    from spectre.db import Repo
+
+    s = get_settings()
+    if not s.db_path.exists():
+        print("la base todavía no existe (corré `spectre db migrate`)")
+        return 0
+    conn = connect(s.db_path)
+    try:
+        cob = Repo(conn).cobertura_partes()
+    finally:
+        conn.close()
+
+    total_partes = 2 * cob["total"]
+    clasificadas = cob["con_actor_tipo"] + cob["con_demandado_tipo"]
+    pct = (100 * clasificadas / total_partes) if total_partes else 0
+    print(
+        f"fallos: {cob['total']}  ·  partes clasificadas: {clasificadas}/"
+        f"{total_partes} ({pct:.0f}%)"
+    )
+    for tipo, n in sorted(cob["por_tipo"].items()):
+        print(f"  {tipo}: {n}")
     return 0
 
 
@@ -1072,6 +1130,27 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="Cuántos sumarios / voces hay cargados, por tomo"
     )
     p_sumarios_status.set_defaults(func=_cmd_sumarios_status)
+
+    p_partes = sub.add_parser(
+        "partes",
+        help="Clasificación del tipo de parte (persona / empresa / estado / "
+        "organismo) de los fallos ya indexados",
+    )
+    partes_sub = p_partes.add_subparsers(
+        dest="partes_command", required=True, metavar="<acción>"
+    )
+    p_partes_recl = partes_sub.add_parser(
+        "reclasificar",
+        help="Recalcula actor / demandado y su tipo desde las carátulas (PR-C5)",
+    )
+    p_partes_recl.add_argument(
+        "--tomo", type=int, metavar="N", help="solo ese tomo (por defecto, todos)"
+    )
+    p_partes_recl.set_defaults(func=_cmd_partes_reclasificar)
+    p_partes_status = partes_sub.add_parser(
+        "status", help="Cobertura de la clasificación de partes"
+    )
+    p_partes_status.set_defaults(func=_cmd_partes_status)
 
     p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
     pdf_sub = p_pdf.add_subparsers(
@@ -1255,6 +1334,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_search_buscar.add_argument(
         "--materia", help="filtra por materia de la Secretaría (PR-C2b)"
+    )
+    p_search_buscar.add_argument(
+        "--parte",
+        choices=["persona_fisica", "empresa", "estado", "organismo"],
+        help="filtra a fallos donde alguna parte es de ese tipo (PR-C5)",
     )
     p_search_buscar.add_argument(
         "--solo-lexico",
