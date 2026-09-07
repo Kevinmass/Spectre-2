@@ -137,23 +137,31 @@ devolver vacío (regla del proyecto: ningún stub que reporte éxito).
 - **`tests/test_sumarios.py`** — parseo puro + bucle con transporte falso
   (siempre), y 3 tests `red` contra el sitio real.
 
-## 5. Qué queda para PR-C2b
+## 5. Qué se hizo en PR-C2b (07/09/2026 — cierra PR-C2)
 
-- Tabla(s) `sumarios` / `voces` (+ `fallo_voces`), migración.
-- Traer los sumarios por fallo durante la ingesta (o un comando
-  `spectre sumarios sync`) y persistirlos.
-- `GET /api/fallos/{cita}` y los resultados de `/api/buscar` muestran el/los
-  sumario(s) cuando existen.
-- Filtro por voz en `/api/buscar` (`filtrar_chunks` o equivalente) + la UI
-  (un input con autocompletado sobre el tesauro).
-- El `analisisDocumental.materiaSecretaria` es la vía para el filtro por
-  **materia / rama** que pidió la observación 01 — evaluarlo en C2b.
+- [x] Tablas `sumarios` / `voces` / `fallo_voces` — migración
+  `0005_sumarios.sql` (aditiva).
+- [x] Comando `spectre sumarios sync <tomo>` (+ `status`) y botón
+  "Sincronizar sumarios" en la Biblioteca (`POST
+  /api/tomos/{n}/sumarios/sync`, en segundo plano). Orquestación en el módulo
+  nuevo `spectre/sumarios/` — **no** una etapa del pipeline (el corpus ya está
+  indexado y no conviene atar la ingesta al sitio con WAF).
+- [x] `GET /api/fallos/{cita}` y cada resultado de `/api/buscar` traen sus
+  `sumarios`.
+- [x] Filtro por voz en `/api/buscar` (`filtrar_chunks(voz=...)`) + input con
+  `<datalist>` en la UI. El autocompletado (`GET /api/voces`) es contra la
+  tabla local `voces` (lo que el corpus tiene), no contra `getVoces` — una voz
+  del tesauro que ningún fallo cargado tiene filtraría a 0.
+- [x] `analisisDocumental.materiaSecretaria` se persiste (`sumarios.materia`) y
+  se filtra: `/api/buscar?materia=` + `<select>` poblado por `GET
+  /api/materias`.
+
+Detalle: `docs/qa/bitacora-PR-C2b.md`.
 
 ## Criterio de aceptación de PR-C2 (del plan)
 
 > cada resultado muestra su sumario oficial cuando existe; se puede filtrar la
 > búsqueda por al menos una voz y el conteo cambia.
 
-**No se cumple con PR-C2a** (que es el spike + el cliente). Se cumple al cerrar
-PR-C2b. La casilla de PR-C2 en `docs/plan-v2.md` queda sin marcar; se agrega
-PR-C2b como continuación.
+**Se cumple al cerrar PR-C2b.** PR-C2a era el spike + el cliente. La casilla de
+PR-C2 en `docs/plan-v2.md` queda marcada con C2b.

@@ -14,6 +14,7 @@ que se desincronicen (el mismo PR pide "migraciones versionadas").
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -215,6 +216,42 @@ class CitaEntrante:
     caratula: str
     pagina_citada: int | None
     contexto: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SumarioGuardado:
+    """Una fila de `sumarios`: un sumario oficial de la CSJN ya persistido
+    (PR-C2b). `voces` es la tupla de descriptores de ESE sumario (se guarda
+    como JSON en la columna, igual que `fallos.jueces`); `materia` es
+    `analisisDocumental.materiaSecretaria`. Distinto de
+    `corpus.csjn.sumarios.Sumario` (el que baja del sitio): `db/` no importa
+    `corpus/`."""
+
+    id: int
+    fallo_id: int
+    orden: int
+    texto: str
+    voces: tuple[str, ...]
+    materia: str | None
+    id_documento: str | None
+    sincronizado_at: str
+
+
+def _sumario(row: sqlite3.Row | None) -> SumarioGuardado | None:
+    if row is None:
+        return None
+    crudo = row["voces"]
+    voces = tuple(json.loads(crudo)) if crudo else ()
+    return SumarioGuardado(
+        id=row["id"],
+        fallo_id=row["fallo_id"],
+        orden=row["orden"],
+        texto=row["texto"],
+        voces=voces,
+        materia=row["materia"],
+        id_documento=row["id_documento"],
+        sincronizado_at=row["sincronizado_at"],
+    )
 
 
 def _tomo(row: sqlite3.Row | None) -> Tomo | None:
@@ -620,15 +657,20 @@ class Repo:
         anio_hasta: int | None = None,
         tribunal_origen: str | None = None,
         tipo_seccion: str | None = None,
+        voz: str | None = None,
+        materia: str | None = None,
     ) -> set[int]:
         """De `ids`, cuáles cumplen los filtros pedidos (rango de años de
-        `fallos.fecha`, tribunal de origen exacto, tipo de sección exacto).
+        `fallos.fecha`, tribunal de origen exacto, tipo de sección exacto, voz
+        del tesauro de la CSJN, materia de la Secretaría).
         `anio_desde`/`anio_hasta` son inclusivos y se pueden usar sueltos (solo
         piso o solo techo); un fallo sin fecha no pasa ningún filtro de año.
-        Sin filtros, es simplemente `set(ids)` — para búsqueda híbrida (PR-15),
-        que filtra *después* de traer candidatos de cada índice: ni LanceDB ni
-        FTS5 saben de año/tribunal/sección, esos metadatos viven en
-        `fallos`/`secciones`.
+        `voz` / `materia` solo dejan pasar fallos con un sumario oficial cargado
+        (PR-C2b) que traiga esa voz / esa materia — la comparación de `voz` es
+        en mayúsculas (así las guarda la CSJN). Sin filtros, es simplemente
+        `set(ids)` — para búsqueda híbrida (PR-15), que filtra *después* de
+        traer candidatos de cada índice: ni LanceDB ni FTS5 saben de estos
+        metadatos, viven en `fallos`/`secciones`/`sumarios`.
         """
         ids = list(ids)
         if not ids:
@@ -647,6 +689,17 @@ class Repo:
         if tipo_seccion is not None:
             condiciones.append("s.tipo = ?")
             params.append(tipo_seccion)
+        if voz is not None:
+            condiciones.append(
+                "c.fallo_id IN (SELECT fv.fallo_id FROM fallo_voces fv"
+                " JOIN voces v ON v.id = fv.voz_id WHERE v.valor = ?)"
+            )
+            params.append(voz.strip().upper())
+        if materia is not None:
+            condiciones.append(
+                "c.fallo_id IN (SELECT fallo_id FROM sumarios WHERE materia = ?)"
+            )
+            params.append(materia)
         where = (" AND " + " AND ".join(condiciones)) if condiciones else ""
         marcadores = ", ".join("?" * len(ids))
         sql = (
@@ -764,3 +817,131 @@ class Repo:
                 (tomo.numero, fallo.pagina_inicio, pagina_fin, fallo_id),
             )
         ]
+
+    # -- sumarios / voces (PR-C2b) ------------------------------------- #
+
+    def _upsert_voz(self, valor: str, codigo: int | None = None) -> int:
+        valor = valor.strip()
+        self.conn.execute(
+            "INSERT INTO voces (valor, codigo) VALUES (?, ?) ON CONFLICT (valor)"
+            " DO UPDATE SET codigo = COALESCE(codigo, excluded.codigo)",
+            (valor, codigo),
+        )
+        fila = self.conn.execute(
+            "SELECT id FROM voces WHERE valor = ?", (valor,)
+        ).fetchone()
+        return int(fila[0])
+
+    def upsert_voz(self, valor: str, codigo: int | None = None) -> int:
+        """Registra una voz del tesauro de la CSJN (o devuelve la que ya
+        estaba). `valor` es único (se guarda tal cual lo da la Corte, en
+        mayúsculas); si ya existía y ahora llega con `codigo`, se completa sin
+        pisar uno previo. Devuelve el `id` de `voces`."""
+        voz_id = self._upsert_voz(valor, codigo)
+        self._commit()
+        return voz_id
+
+    def reemplazar_sumarios_de_fallo(
+        self,
+        fallo_id: int,
+        filas: Iterable[tuple[int, str, Iterable[str], str | None, str | None]],
+    ) -> int:
+        """Deja los sumarios de un fallo exactamente como `filas` (PR-C2b, el
+        sync). Cada fila es `(orden, texto, voces, materia, id_documento)`.
+        Borra primero los sumarios y los `fallo_voces` del fallo, así un
+        segundo sync no acumula (mismo criterio que `borrar_citas_de_fallo`).
+        Registra cada voz en `voces` y arma `fallo_voces`. Devuelve cuántos
+        sumarios insertó."""
+        cuando = ahora_iso()
+        self.conn.execute("DELETE FROM sumarios WHERE fallo_id = ?", (fallo_id,))
+        self.conn.execute("DELETE FROM fallo_voces WHERE fallo_id = ?", (fallo_id,))
+        n = 0
+        for orden, texto, voces, materia, id_documento in filas:
+            voces = [v.strip() for v in voces if v and v.strip()]
+            self.conn.execute(
+                "INSERT INTO sumarios (fallo_id, orden, texto, voces, materia,"
+                " id_documento, sincronizado_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    fallo_id,
+                    orden,
+                    texto,
+                    json.dumps(voces, ensure_ascii=False) if voces else None,
+                    materia,
+                    id_documento,
+                    cuando,
+                ),
+            )
+            for v in voces:
+                voz_id = self._upsert_voz(v)
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO fallo_voces (fallo_id, voz_id)"
+                    " VALUES (?, ?)",
+                    (fallo_id, voz_id),
+                )
+            n += 1
+        self._commit()
+        return n
+
+    def list_sumarios_de_fallo(self, fallo_id: int) -> list[SumarioGuardado]:
+        return [
+            _sumario(row)
+            for row in self.conn.execute(
+                "SELECT * FROM sumarios WHERE fallo_id = ? ORDER BY orden",
+                (fallo_id,),
+            )
+        ]
+
+    def sumarios_por_fallos(
+        self, fallo_ids: Iterable[int]
+    ) -> dict[int, list[SumarioGuardado]]:
+        """Los sumarios de varios fallos de una, para los resultados de
+        `/api/buscar`. `fallo_id` sin sumarios no aparece en el dict."""
+        ids = list(fallo_ids)
+        if not ids:
+            return {}
+        marcadores = ", ".join("?" * len(ids))
+        salida: dict[int, list[SumarioGuardado]] = {}
+        for row in self.conn.execute(
+            f"SELECT * FROM sumarios WHERE fallo_id IN ({marcadores})"
+            " ORDER BY fallo_id, orden",
+            ids,
+        ):
+            salida.setdefault(row["fallo_id"], []).append(_sumario(row))
+        return salida
+
+    def buscar_voces_locales(
+        self, termino: str, *, limite: int = 20
+    ) -> list[tuple[str, int | None]]:
+        """Las voces del corpus (tabla `voces`) que contienen `termino`, para
+        el autocompletado del filtro. Contra lo local, no contra el tesauro
+        vivo de la CSJN: solo tiene sentido ofrecer voces que algún fallo
+        indexado trae."""
+        patron = f"%{termino.strip().upper()}%"
+        return [
+            (row["valor"], row["codigo"])
+            for row in self.conn.execute(
+                "SELECT valor, codigo FROM voces WHERE valor LIKE ?"
+                " ORDER BY valor LIMIT ?",
+                (patron, limite),
+            )
+        ]
+
+    def materias_del_corpus(self) -> list[str]:
+        """Las materias de la Secretaría presentes en el corpus (para el
+        `<select>` de materia de la UI)."""
+        return [
+            row[0]
+            for row in self.conn.execute(
+                "SELECT DISTINCT materia FROM sumarios"
+                " WHERE materia IS NOT NULL AND materia <> '' ORDER BY materia"
+            )
+        ]
+
+    def contar_sumarios_de_tomo(self, tomo_id: int) -> int:
+        return int(
+            self.conn.execute(
+                "SELECT count(*) FROM sumarios s JOIN fallos f ON f.id = s.fallo_id"
+                " WHERE f.tomo_id = ?",
+                (tomo_id,),
+            ).fetchone()[0]
+        )

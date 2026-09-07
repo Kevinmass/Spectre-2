@@ -54,6 +54,7 @@ MIGRACIONES = [
     "0002_jobs_estado_check",
     "0003_chunks_fts",
     "0004_tomos_estado_check",
+    "0005_sumarios",
 ]
 
 
@@ -69,6 +70,9 @@ def test_migrate_crea_el_esquema_completo(conn):
         "citas",
         "jobs",
         "chunks_fts",
+        "sumarios",
+        "voces",
+        "fallo_voces",
         "_migraciones",
     }
     assert esperadas <= _tablas(conn)
@@ -769,6 +773,144 @@ def test_citas_entrantes_sin_pagina_inicio_es_vacio(repo):
     tomo_id = repo.insert_tomo(348)
     fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:100")  # sin páginas
     assert repo.citas_entrantes(fid) == []
+
+
+# --- sumarios / voces (PR-C2b) --------------------------------------------- #
+
+
+def _fallo_para_sumarios(repo, numero=348, pagina=34):
+    tomo_id = repo.insert_tomo(numero, estado="indexado")
+    fallo_id = repo.insert_fallo(
+        tomo_id,
+        "A c/ B",
+        cita=f"{numero}:{pagina}",
+        pagina_inicio=pagina,
+        pagina_fin=pagina + 3,
+    )
+    return tomo_id, fallo_id
+
+
+def test_upsert_voz_dedup_y_backfill_de_codigo(repo):
+    a = repo.upsert_voz("CONTRATO ADMINISTRATIVO")
+    b = repo.upsert_voz("CONTRATO ADMINISTRATIVO", 1144)
+    assert a == b
+    fila = repo.conn.execute(
+        "SELECT valor, codigo FROM voces WHERE id = ?", (a,)
+    ).fetchone()
+    assert fila["valor"] == "CONTRATO ADMINISTRATIVO"
+    assert fila["codigo"] == 1144
+    # un segundo upsert sin código no pisa el que ya está
+    repo.upsert_voz("CONTRATO ADMINISTRATIVO")
+    assert (
+        repo.conn.execute("SELECT codigo FROM voces WHERE id = ?", (a,)).fetchone()[0]
+        == 1144
+    )
+    assert repo.conn.execute("SELECT count(*) FROM voces").fetchone()[0] == 1
+
+
+def test_reemplazar_sumarios_persiste_texto_voces_y_fallo_voces(repo):
+    _tomo_id, fallo_id = _fallo_para_sumarios(repo)
+    n = repo.reemplazar_sumarios_de_fallo(
+        fallo_id,
+        [
+            (0, "Regla A", ["DEPOSITO PREVIO", "INTERESES"], "ADMIN", "8059511"),
+            (1, "Regla B", ["INTERESES"], "ADMIN", None),
+        ],
+    )
+    assert n == 2
+    sumarios = repo.list_sumarios_de_fallo(fallo_id)
+    assert [s.texto for s in sumarios] == ["Regla A", "Regla B"]
+    assert sumarios[0].voces == ("DEPOSITO PREVIO", "INTERESES")
+    assert sumarios[0].materia == "ADMIN"
+    assert sumarios[0].id_documento == "8059511"
+    # fallo_voces: una fila por voz distinta del fallo (INTERESES no se duplica)
+    filas = repo.conn.execute(
+        "SELECT count(*) FROM fallo_voces WHERE fallo_id = ?", (fallo_id,)
+    ).fetchone()[0]
+    assert filas == 2
+
+
+def test_reemplazar_sumarios_es_idempotente(repo):
+    _tomo_id, fallo_id = _fallo_para_sumarios(repo)
+    repo.reemplazar_sumarios_de_fallo(fallo_id, [(0, "v1", ["A", "B"], None, None)])
+    repo.reemplazar_sumarios_de_fallo(fallo_id, [(0, "v2", ["B", "C"], None, None)])
+    sumarios = repo.list_sumarios_de_fallo(fallo_id)
+    assert [s.texto for s in sumarios] == ["v2"]
+    voces = repo.conn.execute(
+        "SELECT v.valor FROM fallo_voces fv JOIN voces v ON v.id = fv.voz_id"
+        " WHERE fv.fallo_id = ? ORDER BY v.valor",
+        (fallo_id,),
+    ).fetchall()
+    assert [r[0] for r in voces] == ["B", "C"]
+    # "A" quedó en `voces` (no se borra el catálogo) pero sin fallo que la use
+    assert (
+        repo.conn.execute("SELECT count(*) FROM voces WHERE valor = 'A'").fetchone()[0]
+        == 1
+    )
+
+
+def test_borrar_fallo_arrastra_sumarios_y_fallo_voces(repo):
+    _tomo_id, fallo_id = _fallo_para_sumarios(repo)
+    repo.reemplazar_sumarios_de_fallo(fallo_id, [(0, "x", ["A"], None, None)])
+    repo.conn.execute("DELETE FROM fallos WHERE id = ?", (fallo_id,))
+    repo.conn.commit()
+    assert repo.conn.execute("SELECT count(*) FROM sumarios").fetchone()[0] == 0
+    assert repo.conn.execute("SELECT count(*) FROM fallo_voces").fetchone()[0] == 0
+
+
+def test_buscar_voces_locales_por_substring_case_insensitive(repo):
+    _tomo_id, fallo_id = _fallo_para_sumarios(repo)
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id,
+        [(0, "x", ["CONTRATO ADMINISTRATIVO", "CONTRATO DE TRABAJO"], None, None)],
+    )
+    valores = [v for v, _ in repo.buscar_voces_locales("contrato")]
+    assert valores == ["CONTRATO ADMINISTRATIVO", "CONTRATO DE TRABAJO"]
+    assert repo.buscar_voces_locales("zzz") == []
+
+
+def test_materias_del_corpus_distintas_y_ordenadas(repo):
+    _t1, f1 = _fallo_para_sumarios(repo, numero=348, pagina=10)
+    _t2, f2 = _fallo_para_sumarios(repo, numero=349, pagina=20)
+    repo.reemplazar_sumarios_de_fallo(f1, [(0, "x", [], "PENAL", None)])
+    repo.reemplazar_sumarios_de_fallo(
+        f2, [(0, "y", [], "ADMIN", None), (1, "z", [], "PENAL", None)]
+    )
+    assert repo.materias_del_corpus() == ["ADMIN", "PENAL"]
+
+
+def test_filtrar_chunks_por_voz_y_por_materia(repo):
+    tomo_id = repo.insert_tomo(348, estado="indexado")
+    ids = []
+    for i, (voz, materia) in enumerate(
+        [("DEPOSITO PREVIO", "ADMIN"), ("OTRA VOZ", "PENAL")]
+    ):
+        fallo_id = repo.insert_fallo(
+            tomo_id, "A c/ B", cita=f"348:{i + 1}", pagina_inicio=i + 1
+        )
+        cur = repo.conn.execute(
+            "INSERT INTO secciones (fallo_id, tipo, orden) VALUES (?, 'mayoria', 0)",
+            (fallo_id,),
+        )
+        repo.conn.commit()
+        repo.insert_chunks(fallo_id, [(cur.lastrowid, 0, f"texto {i}", None)])
+        repo.reemplazar_sumarios_de_fallo(fallo_id, [(0, "s", [voz], materia, None)])
+        ids.append(repo.list_chunks_de_fallo(fallo_id)[0].id)
+
+    assert repo.filtrar_chunks(ids, voz="deposito previo") == {ids[0]}
+    assert repo.filtrar_chunks(ids, voz="DEPOSITO PREVIO") == {ids[0]}
+    assert repo.filtrar_chunks(ids, materia="PENAL") == {ids[1]}
+    assert repo.filtrar_chunks(ids, voz="OTRA VOZ", materia="ADMIN") == set()
+    assert repo.filtrar_chunks(ids, voz="no existe") == set()
+
+
+def test_contar_sumarios_de_tomo(repo):
+    tomo_id, fallo_id = _fallo_para_sumarios(repo)
+    assert repo.contar_sumarios_de_tomo(tomo_id) == 0
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id, [(0, "a", [], None, None), (1, "b", [], None, None)]
+    )
+    assert repo.contar_sumarios_de_tomo(tomo_id) == 2
 
 
 # --- auto_commit=False (PR-19: uso dentro de un handler del job runner) - #
