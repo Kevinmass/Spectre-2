@@ -81,6 +81,15 @@ a tener sentido cuando entren documentos privados de clientes.
 
 Las dos opciones están en la Tanda D. No se empieza esa tanda sin cerrar esto.
 
+**D-17. Spectre es multi-tribunal, no solo CSJN.** Decidido el 06/09/2026 a
+partir de la observación 01: la primera usuaria pidió, sin que se le
+preguntara, jurisprudencia de otras cortes (nombró el Tribunal Superior de
+Justicia de Córdoba). Limitar el corpus a los Fallos de la CSJN limita a
+cuántos abogados les sirve la herramienta. Esto **no** entra en la Tanda A ni
+B —esas arreglan lo que ya hay—: es la Tanda E, y empieza con un spike de
+fuentes. Refuerza D-16 hacia la Opción 1: mantener 349 tomos + N tribunales
+provinciales sincronizados es trabajo de servidor, no de cada instalación.
+
 ---
 
 ## 4. Tanda A — Que los resultados sirvan
@@ -89,12 +98,19 @@ Las dos opciones están en la Tanda D. No se empieza esa tanda sin cerrar esto.
 y probado que hay que exponer o corregir. No depende de ninguna decisión
 pendiente: se puede empezar hoy.*
 
-- [ ] **PR-A0 `[N]` Sesión de observación con la primera usuaria**
+- [x] **PR-A0 `[N]` Sesión de observación con la primera usuaria**
   No es código. Sentarse a mirarla buscar cinco cosas que necesite de verdad,
   sin guiarla y sin explicarle la interfaz. Anotar dónde duda, qué escribe en
   el campo, qué esperaba que pasara al hacer clic, y qué preguntó.
   *Entrega:* `docs/qa/observacion-01.md`.
   *Bloquea:* toda la Tanda B.
+  *Cerrado con una salvedad:* la devolución llegó como resumen, no como
+  observación con registro en vivo. Los seis problemas del §2 no se
+  confirmaron ni se descartaron; la Tanda B sigue sin validación de usuaria
+  y conviene una segunda sesión con la plantilla antes de arrancar B1–B3.
+  Lo que salió ya está incorporado al plan: año como rango en PR-A2, filtros
+  por materia/rama vía PR-C2, filtro por tipo de parte en PR-C5, y el corpus
+  multi-tribunal como D-17 + Tanda E. Detalle en `observacion-01.md` §8.
 
 - [ ] **PR-A1 `[N]` Agrupar los resultados por fallo**
   Un resultado = un caso, con sus pasajes anidados y un contador
@@ -105,10 +121,17 @@ pendiente: se puede empezar hoy.*
   una (hoy: entre 2 y 10, promedio 5,25).
 
 - [ ] **PR-A2 `[N]` Filtros en la pantalla**
-  Año, tribunal de origen, tipo de sección y "solo léxico". El backend ya los
-  acepta y los tiene testeados; esto es exponerlos.
+  Tribunal de origen, tipo de sección y "solo léxico" — el backend ya los
+  acepta y los tiene testeados, esto es exponerlos. Más el año como **rango**
+  (desde / hasta, o "últimos N años"): hoy `buscar_hibrido` toma `anio` como
+  match exacto y la observación 01 pidió filtrar "por antigüedad", que es un
+  rango. Ese es el único cambio de backend del PR.
   *Acepta:* filtrar por `seccion=disidencia` desde la UI y ver que el conteo
-  cambia; los filtros sobreviven a una nueva búsqueda.
+  cambia; acotar a un rango de años y ver que caen los de afuera; los filtros
+  sobreviven a una nueva búsqueda.
+  *Nota:* los filtros por materia / rama del derecho / tipo de parte que
+  también pidió la observación 01 **no** entran acá —no hay dato para eso
+  todavía—: salen de PR-C2 (materia/rama) y PR-C5 (tipo de parte).
 
 - [ ] **PR-A3 `[N]` Arreglar el resaltado**
   Lista de palabras vacías del castellano y límites de palabra en el regex.
@@ -179,12 +202,32 @@ pendiente: se puede empezar hoy.*
   *Acepta:* 887 citas para el Tomo 348 en la tabla; un fallo muestra quién lo
   cita dentro del corpus indexado.
 
-- [ ] **PR-C2 `[N]` Sumarios oficiales de la CSJN**
+- [ ] **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
   La Secretaría de Jurisprudencia publica sumarios consultables por tomo y
   página — exactamente la clave que ya extraemos. Contenido curado por la
-  Corte, gratis, que hace legible cada resultado.
-  *Empieza con un spike:* confirmar que se pueden consultar
-  programáticamente antes de construir.
+  Corte, gratis, que hace dos cosas: hace legible cada resultado **y** trae
+  los descriptores ("voces") con los que la propia Corte clasifica cada
+  fallo. Esas voces son la vía realista para los filtros por **materia y rama
+  del derecho** que pidió la observación 01 (p. ej. "derecho administrativo",
+  "contratación pública") — no hay que inventar una taxonomía, ya existe.
+  *Empieza con un spike:* (1) confirmar que los sumarios se pueden consultar
+  programáticamente; (2) ver en qué formato vienen — si es PDF **no
+  seleccionable** (imagen escaneada), hay que decidir si entra una
+  herramienta de OCR ahora (hoy está en "fuera de v2", §9) o si se busca otra
+  fuente; (3) ver si las voces vienen estructuradas o hay que parsearlas.
+  *Acepta:* cada resultado muestra su sumario oficial cuando existe; se puede
+  filtrar la búsqueda por al menos una voz y el conteo cambia.
+
+- [ ] **PR-C5 `[N]` Filtro por tipo de parte**
+  La observación 01 pidió filtrar por "las partes, p. ej. que una sea una
+  empresa". Las partes ya se extraen por fallo (PR-08), pero como texto libre;
+  falta clasificar su naturaleza: persona física / empresa / Estado /
+  organismo público. Clasificación sobre los strings de partes (reglas +
+  listas, o modelo si no alcanza), columna nueva, backfill del corpus
+  indexado, y el filtro en `buscar_hibrido` + la UI.
+  *Acepta:* filtrar "una parte es el Estado" y "una parte es una empresa"
+  desde la UI y ver que el conteo cambia; medir la cobertura de la
+  clasificación sobre el fixture (Tomo 348) y anotarla, no forzarla.
 
 - [ ] **PR-C3 `[V]` Reranker sobre los primeros 50**
   Depende de PR-A6: sin el set de evaluación no hay forma de afirmar que
@@ -217,17 +260,66 @@ Los PRs de esta tanda se escriben una vez elegida la opción.
 
 ---
 
-## 8. Fuera de v2
+## 8. Tanda E — Multi-tribunal
 
-OCR de tomos antiguos, análisis con IA de los resultados, y documentos privados
-de clientes. Los tres son proyectos, no PRs. Ninguno mejora la experiencia de
-alguien que hoy busca jurisprudencia: el orden correcto es que las búsquedas
-devuelvan casos antes de agregarles inteligencia.
+*Sale de D-17. El corpus deja de ser solo los Fallos de la CSJN. Es la tanda
+más grande y la que más incertidumbre tiene: no se planifica en detalle hasta
+tener el spike. Se cruza con D-16 (si el corpus es N tribunales, el índice
+compartido deja de ser una opción y pasa a ser el único camino sensato).*
+
+- [ ] **PR-E0 `[N]` Spike de fuentes**
+  No es corpus todavía: es el relevamiento. Para el TSJ de Córdoba y para el
+  agregador nacional (SAIJ / `datos.jus.gob.ar`), responder: qué tribunales y
+  qué rango de fechas cubre cada fuente, en qué formato entrega (PDF
+  seleccionable, PDF escaneado, HTML, JSON), si hay descarga masiva o API o
+  sólo consulta de a uno, qué metadatos trae por fallo (fecha, sala, partes,
+  voces), y bajo qué licencia. Comparar contra bajar PDFs corte por corte.
+  *Entrega:* `docs/qa/fuentes-multitribunal.md` con una recomendación —
+  fuente única normalizada vs. varias fuentes— y si hace falta OCR.
+  *Bloquea:* al resto de la Tanda E.
+
+- [ ] **PR-E1 `[N]` Abstraer "tomo" a "fuente"**
+  Hoy la unidad de ingesta es el tomo de la CSJN y la cita es `N:N`. Generalizar:
+  un fallo pertenece a una *fuente* (CSJN Fallos, TSJ Córdoba Sala Civil, …)
+  con su propio identificador de cita, su propio parser de estructura y su
+  propia forma de descargar. `corpus/csjn/` pasa a ser una implementación de
+  una interfaz, no *la* implementación.
+  *Acepta:* indexar un fallo de una fuente no-CSJN de punta a punta sin tocar
+  el código de la fuente CSJN; la búsqueda y la vista de fallo funcionan
+  igual para las dos.
+
+- [ ] **PR-E2+ — según el spike.** Ingesta de la primera fuente provincial,
+  ajuste del parser de citas para reconocer formatos no-CSJN, y la Biblioteca
+  (PR-B4) mostrando fuentes además de tomos. El detalle se escribe con PR-E0
+  cerrado.
+
+*Nota de identidad:* con la Tanda E, "colección Fallos de la CSJN" en
+`CLAUDE.md`, el `README` y el `<title>` deja de ser exacto. El cambio de
+copy va con el primer PR de la tanda que toque UI, no antes.
 
 ---
 
-## 9. Estado
+## 9. Fuera de v2
 
-Ningún PR de v2 arrancado. Próximo: **PR-A0** (observación) y **PR-A1**
-(agrupar por fallo) — se pueden hacer en cualquier orden, A0 no bloquea la
-Tanda A.
+Análisis con IA de los resultados y documentos privados de clientes: son
+proyectos, no PRs, y ninguno mejora la experiencia de alguien que hoy busca
+jurisprudencia.
+
+OCR de tomos/fuentes escaneados sigue acá **por defecto**, pero puede entrar
+antes si el spike de PR-C2 o el de PR-E0 encuentran que una fuente que
+queremos sí o sí viene sólo como imagen. Esa decisión se toma con el número
+del spike delante, no ahora.
+
+---
+
+## 10. Estado
+
+Tanda A: **PR-A0 cerrado** (con salvedad — ver su casilla). Próximo: **PR-A1**
+(agrupar por fallo). PR-A1 a PR-A6 no dependen de nada pendiente.
+
+Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
+resumen y no validó los seis problemas del §2 — conviene una segunda sesión
+con registro en vivo antes de arrancar B1–B3.
+
+Tandas C, D, E: sin arrancar. D espera la decisión D-16. E arranca por
+PR-E0 (spike) en cuanto se le quiera dar prioridad; D-17 ya está tomada.

@@ -72,3 +72,89 @@ que entrega esta PR es el instrumento listo para usar, no los hallazgos.
 - El instrumento asume que la usuaria trae un caso real ese día. Si no tiene
   ninguno entre manos, hay que reagendar: buscar sobre un caso inventado no
   sirve para esto.
+
+---
+
+## Cierre (sesión hecha)
+
+Kevin corrió la observación y trajo la devolución al chat como **resumen de
+conclusiones**, no como registro en vivo (sin búsqueda por búsqueda, sin
+transcripción textual, sin línea de tiempo).
+
+### Qué se hizo en el cierre
+
+- `docs/qa/observacion-01.md`: se completó §7 (cierre) y §8 (síntesis) con lo
+  que devolvió la usuaria; §3, §4 y §6 quedan como plantilla para una próxima
+  observación con registro en vivo, con una nota explícita de por qué no se
+  llenaron. Encabezado actualizado al estado "sesión hecha, registrada como
+  resumen".
+- `docs/plan-v2.md`: casilla de PR-A0 marcada `[x]` con una salvedad, **y los
+  cambios que la observación abrió, ya decididos con Kevin en el chat**:
+  - **§3 D-17** (nueva): Spectre es multi-tribunal. Limitar a CSJN limita a
+    cuántos abogados les sirve. Refuerza D-16 hacia el índice compartido.
+  - **§4 PR-A2**: se le suma el año como rango; se aclara que
+    materia/rama/tipo-de-parte no entran acá.
+  - **§6 PR-C2**: re-scope — los sumarios oficiales también son la fuente de
+    los filtros por materia / rama (voces de la Secretaría). El spike suma
+    ver el formato (PDF seleccionable vs. escaneado → ¿OCR?).
+  - **§6 PR-C5** (nuevo): filtro por tipo de parte (persona / empresa /
+    Estado / organismo) sobre `partes`.
+  - **§8 Tanda E — Multi-tribunal** (nueva): PR-E0 spike de fuentes
+    (`docs/qa/fuentes-multitribunal.md`), PR-E1 abstraer "tomo" → "fuente",
+    PR-E2+ según el spike. Renumeró "Fuera de v2" a §9 y "Estado" a §10.
+  - **§9 Fuera de v2**: OCR sigue por defecto afuera, pero puede adelantarse
+    si el spike de C2 o E0 encuentra una fuente que sólo viene escaneada.
+
+### Qué devolvió la usuaria (resumen)
+
+- "El programa funciona bien." Ninguna objeción de que algo esté roto o sea
+  confuso — todas las objeciones son de **alcance**.
+- **Más filtros de búsqueda:** por tribunal, por antigüedad, por rama del
+  derecho (ej. derecho administrativo), por tema/materia (ej. contratación
+  pública), por tipo de parte (ej. que una parte sea una empresa).
+- **Corpus multi-tribunal:** además de los Fallos de la CSJN, fallos de otras
+  cortes — nombró el Tribunal Superior de Justicia de Córdoba.
+
+### Qué decidí por mi cuenta en el cierre
+
+- **No fabriqué el detalle que no existe.** El §2 del plan (los seis
+  problemas de UX) no se confirmó ni se descartó porque la usuaria no habló
+  de eso; lo dejé dicho así, sin inventar fricciones. La Tanda B queda
+  marcada como "sin validar con usuaria".
+- **Separé el resumen crudo (§7-§8.4) de los cambios al plan (§8.5).** El
+  primer commit de esta rama sólo marcó la casilla y anotó la salvedad; los
+  cambios de estructura (D-17, Tanda E, re-scope de C2, PR-C5, rango en A2)
+  se aplicaron en un segundo commit, después de que Kevin los aprobara uno
+  por uno en el chat. §8.5 quedó como registro de qué se decidió y por qué.
+- **Corregí el supuesto "son QoL, no suma trabajo"** en la síntesis: vale
+  para filtrar por tribunal y por antigüedad (el backend ya tiene el dato);
+  no vale para rama / materia / tipo de parte (no hay dato estructurado) ni
+  para multi-tribunal (rehace la ingesta).
+- **Spike de fuentes de otras cortes:** hice un primer barrido web (está en
+  §8.2.B de `observacion-01.md`) — Poder Judicial de Córdoba publica PDFs
+  anuales de la Sala Civil y Comercial del TSJ; SAIJ / datos.jus.gob.ar es
+  el candidato más fuerte para un corpus multi-jurisdicción normalizado.
+  No es una investigación cerrada, es de dónde seguir.
+
+### Qué verifiqué
+
+- Los filtros que `spectre/search/hybrid.py::buscar_hibrido` soporta hoy:
+  `anio`, `tribunal_origen`, `tipo_seccion` (parámetros de la función, líneas
+  66-68). De ahí sale qué pedido es "exponer" y cuál es "dato nuevo".
+- `spectre serve` / `app.js`: el buscador queda `disabled` con
+  `estado.chunks === 0` — la sesión necesitaba la base real, se asume que
+  Kevin la usó así.
+- Búsquedas web (2026-09): jurisprudencia TSJ Córdoba y SAIJ jurisprudencia
+  provincial — resultados y límites anotados en §8.2.B.
+
+### Dudas abiertas
+
+- **D-17 ya está tomada** (multi-tribunal), pero la elección de fuente —SAIJ /
+  `datos.jus.gob.ar` como agregador normalizado vs. bajar PDFs corte por
+  corte— no: eso lo resuelve PR-E0 (spike) con los números delante.
+- **OCR**: si el spike de PR-C2 (sumarios) o el de PR-E0 encuentra que una
+  fuente que queremos sí o sí viene sólo escaneada, OCR se adelanta desde
+  "fuera de v2". No se decide ahora.
+- **La Tanda B necesita todavía una observación con registro en vivo.** Este
+  cierre no la sustituye — la observación 01 validó pedidos de alcance, no
+  los seis problemas de UX del §2.
