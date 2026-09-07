@@ -250,21 +250,23 @@ partes, de rama, de materia), y #6 rehace la ingesta. Ver §8.2.
   escrito** (A2 = exponer filtros que ya existen). Necesitan PR propio o
   re-scope de PR-C2 — decisión de planificación, no de la Tanda A.
 
-### 8.5 Cambios propuestos al plan v2
+### 8.5 Cambios al plan v2 (decididos con Kevin el 06/09/2026)
 
-Para discutir antes de tocar `docs/plan-v2.md`:
+Ya aplicados a `docs/plan-v2.md` en el mismo commit que cierra PR-A0:
 
-1. **PR-A2** — ampliar el criterio: además de exponer `tribunal` / `sección`
-   / `solo léxico`, pasar el filtro de año a **rango**.
-2. **PR-C2** — re-scope explícito: los sumarios oficiales no son sólo texto
-   legible por resultado, son **la fuente de los filtros por materia / rama
-   del derecho** (voces de la Secretaría de Jurisprudencia).
-3. **PR nuevo (Tanda C)** — clasificar el **tipo de parte** (persona /
-   empresa / Estado / organismo) sobre `partes`, y exponerlo como filtro.
-4. **Decisión nueva (¿D-17?)** — *¿Spectre es sólo CSJN o multi-tribunal?*
-   Igual que D-16, se decide antes de planificar los PRs que dependen. Si la
-   respuesta es "sí, multi-tribunal", entra un spike de fuentes (SAIJ vs.
-   PDFs provinciales) como primer paso.
+1. **PR-A2** — se le suma el año como **rango** (desde/hasta o "últimos N
+   años"); es el único cambio de backend del PR. Los filtros por
+   materia/rama/parte se sacan de acá y se mandan a C2/C5.
+2. **PR-C2** — re-scope: los sumarios oficiales también son **la fuente de
+   los filtros por materia / rama del derecho**, vía las "voces" de la
+   Secretaría de Jurisprudencia. El spike además tiene que ver el formato
+   (PDF seleccionable vs. escaneado → ¿OCR?).
+3. **PR-C5** (nuevo, Tanda C) — clasificar el **tipo de parte** (persona /
+   empresa / Estado / organismo) sobre `partes` y exponerlo como filtro.
+4. **D-17** — *Spectre es multi-tribunal.* Limitar a CSJN limita a cuántos
+   abogados les sirve. Entra la **Tanda E**, que arranca con **PR-E0**, un
+   spike de fuentes (TSJ Córdoba, SAIJ / `datos.jus.gob.ar`, o PDFs corte
+   por corte). Refuerza D-16 hacia el índice compartido.
 
 ---
 

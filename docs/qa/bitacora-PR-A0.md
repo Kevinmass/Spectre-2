@@ -88,8 +88,22 @@ transcripción textual, sin línea de tiempo).
   observación con registro en vivo, con una nota explícita de por qué no se
   llenaron. Encabezado actualizado al estado "sesión hecha, registrada como
   resumen".
-- `docs/plan-v2.md`: casilla de PR-A0 marcada `[x]`, con una salvedad de tres
-  renglones sobre el formato de la devolución y lo que abre.
+- `docs/plan-v2.md`: casilla de PR-A0 marcada `[x]` con una salvedad, **y los
+  cambios que la observación abrió, ya decididos con Kevin en el chat**:
+  - **§3 D-17** (nueva): Spectre es multi-tribunal. Limitar a CSJN limita a
+    cuántos abogados les sirve. Refuerza D-16 hacia el índice compartido.
+  - **§4 PR-A2**: se le suma el año como rango; se aclara que
+    materia/rama/tipo-de-parte no entran acá.
+  - **§6 PR-C2**: re-scope — los sumarios oficiales también son la fuente de
+    los filtros por materia / rama (voces de la Secretaría). El spike suma
+    ver el formato (PDF seleccionable vs. escaneado → ¿OCR?).
+  - **§6 PR-C5** (nuevo): filtro por tipo de parte (persona / empresa /
+    Estado / organismo) sobre `partes`.
+  - **§8 Tanda E — Multi-tribunal** (nueva): PR-E0 spike de fuentes
+    (`docs/qa/fuentes-multitribunal.md`), PR-E1 abstraer "tomo" → "fuente",
+    PR-E2+ según el spike. Renumeró "Fuera de v2" a §9 y "Estado" a §10.
+  - **§9 Fuera de v2**: OCR sigue por defecto afuera, pero puede adelantarse
+    si el spike de C2 o E0 encuentra una fuente que sólo viene escaneada.
 
 ### Qué devolvió la usuaria (resumen)
 
@@ -107,10 +121,11 @@ transcripción textual, sin línea de tiempo).
   problemas de UX) no se confirmó ni se descartó porque la usuaria no habló
   de eso; lo dejé dicho así, sin inventar fricciones. La Tanda B queda
   marcada como "sin validar con usuaria".
-- **Separé el resumen crudo (§7-§8.4) de la propuesta de cambios al plan
-  (§8.5).** No toqué la estructura de Tandas de `plan-v2.md` — eso queda para
-  que Kevin lo apruebe. La casilla marcada y la salvedad son lo único que
-  cambié del plan.
+- **Separé el resumen crudo (§7-§8.4) de los cambios al plan (§8.5).** El
+  primer commit de esta rama sólo marcó la casilla y anotó la salvedad; los
+  cambios de estructura (D-17, Tanda E, re-scope de C2, PR-C5, rango en A2)
+  se aplicaron en un segundo commit, después de que Kevin los aprobara uno
+  por uno en el chat. §8.5 quedó como registro de qué se decidió y por qué.
 - **Corregí el supuesto "son QoL, no suma trabajo"** en la síntesis: vale
   para filtrar por tribunal y por antigüedad (el backend ya tiene el dato);
   no vale para rama / materia / tipo de parte (no hay dato estructurado) ni
@@ -134,8 +149,12 @@ transcripción textual, sin línea de tiempo).
 
 ### Dudas abiertas
 
-- Si el pedido de multi-tribunal se toma, hace falta una decisión tipo D-16
-  (¿D-17?) antes de planificar: SAIJ como fuente única normalizada vs. bajar
-  PDFs corte por corte. Está propuesto en §8.5, sin decidir.
-- La Tanda B necesita todavía una observación con registro en vivo. Este
-  cierre no la sustituye.
+- **D-17 ya está tomada** (multi-tribunal), pero la elección de fuente —SAIJ /
+  `datos.jus.gob.ar` como agregador normalizado vs. bajar PDFs corte por
+  corte— no: eso lo resuelve PR-E0 (spike) con los números delante.
+- **OCR**: si el spike de PR-C2 (sumarios) o el de PR-E0 encuentra que una
+  fuente que queremos sí o sí viene sólo escaneada, OCR se adelanta desde
+  "fuera de v2". No se decide ahora.
+- **La Tanda B necesita todavía una observación con registro en vivo.** Este
+  cierre no la sustituye — la observación 01 validó pedidos de alcance, no
+  los seis problemas de UX del §2.
