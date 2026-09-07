@@ -822,6 +822,28 @@ def _cmd_csjn_download(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_csjn_sumario(args: argparse.Namespace) -> int:
+    from spectre.corpus.csjn import buscar_sumarios
+
+    sumarios = buscar_sumarios(args.tomo, args.pagina)
+    print(f"tomo {args.tomo}, página {args.pagina}: {len(sumarios)} sumario(s)")
+    if not sumarios:
+        print(
+            "  (ese fallo no tiene sumarios en la base de la Secretaría, "
+            "o la página no es el inicio de un fallo)"
+        )
+        return 0
+    for i, s in enumerate(sumarios, 1):
+        print(f"\n--- sumario {i}/{len(sumarios)} ---")
+        if s.caratula:
+            print(f"  carátula: {s.caratula}")
+        if s.fecha:
+            print(f"  fecha:    {s.fecha}")
+        print(f"  voces:    {' · '.join(s.voces) if s.voces else '(sin voces)'}")
+        print(f"  texto:    {s.texto}")
+    return 0
+
+
 def _cmd_ingest(args: argparse.Namespace) -> int:
     from spectre.db import Repo
     from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
@@ -950,6 +972,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="vuelve a descargar aunque el destino ya exista",
     )
     p_csjn_download.set_defaults(func=_cmd_csjn_download)
+    p_csjn_sumario = csjn_sub.add_parser(
+        "sumario",
+        help="Sumarios oficiales + voces de un fallo (por tomo y página). Mide, "
+        "no persiste (PR-C2)",
+    )
+    p_csjn_sumario.add_argument("tomo", type=int, help="tomo de Fallos")
+    p_csjn_sumario.add_argument(
+        "pagina", type=int, help="página de inicio del fallo (la de la cita N:N)"
+    )
+    p_csjn_sumario.set_defaults(func=_cmd_csjn_sumario)
 
     p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
     pdf_sub = p_pdf.add_subparsers(
