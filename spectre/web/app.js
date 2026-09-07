@@ -669,6 +669,14 @@ document.getElementById("form-indexar-csjn").addEventListener("submit", (ev) => 
   const form = ev.target;
   const numero = form.elements.numero.value;
   const csjnTomoId = form.elements.csjn_tomo_id.value.trim();
+  if (!csjnTomoId) {
+    const aviso = document.getElementById("biblioteca-aviso");
+    aviso.hidden = false;
+    aviso.textContent =
+      "Falta el id de la CSJN (no es el número de tomo): lo da " +
+      "`spectre csjn catalog`. Si ya tenés el PDF, usá «Subir un PDF propio».";
+    return;
+  }
   indexarDesdeCsjn(numero, csjnTomoId, form.querySelector("button"));
 });
 

@@ -80,9 +80,18 @@
             <input type="number" name="numero" min="1" required />
           </label>
           <label>
-            Id de la CSJN (opcional)
-            <input type="text" name="csjn_tomo_id" placeholder="lo da `spectre csjn catalog`" />
+            Id de la CSJN
+            <input
+              type="text"
+              name="csjn_tomo_id"
+              required
+              placeholder="p. ej. 445 — lo da `spectre csjn catalog`"
+            />
           </label>
+          <p class="ayuda-form">
+            No es el número de tomo: es un id interno del sitio de la Corte.
+            Si ya tenés el PDF, usá «Subir un PDF propio».
+          </p>
           <button type="submit">Indexar</button>
         </form>
 

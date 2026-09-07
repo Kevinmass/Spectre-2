@@ -432,9 +432,32 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         try:
             migrate(conn)
             repo = Repo(conn)
-            tomo_id = iniciar_tomo(
-                repo, numero=numero, csjn_tomo_id=payload.csjn_tomo_id
-            )
+
+            csjn_tomo_id = (payload.csjn_tomo_id or "").strip() or None
+            existente = repo.get_tomo_por_numero(numero)
+            # El PDF de un tomo se baja por su id **interno** de la CSJN
+            # (`/sj/verTomo?tomoId=N`), que no es el número de tomo y no se
+            # puede deducir: lo da `spectre csjn catalog`. Sin ese id no hay
+            # descarga posible, así que se corta acá con un 400 legible en
+            # vez de registrar un tomo que después revienta en la etapa
+            # `descargar` y queda a la vista con un error de programador
+            # (bug reportado sobre la Biblioteca; el arreglo de fondo —elegir
+            # el tomo de un catálogo, sin tipear ids— es PR-B4). Se deja pasar
+            # si el tomo ya existe con un id o un PDF: eso es retomar una
+            # indexación, no arrancar una sin con qué.
+            if csjn_tomo_id is None and (
+                existente is None
+                or (not existente.csjn_tomo_id and not existente.pdf_path)
+            ):
+                raise HTTPException(
+                    400,
+                    f"Falta el id de la CSJN para el tomo {numero}. Ese id es "
+                    "interno del sitio de la Corte (no es el número de tomo); "
+                    "lo da `spectre csjn catalog`. Si ya tenés el PDF, subilo "
+                    'con "Subir un PDF propio".',
+                )
+
+            tomo_id = iniciar_tomo(repo, numero=numero, csjn_tomo_id=csjn_tomo_id)
             tomo = repo.get_tomo(tomo_id)
             cuerpo = _tomo_a_dict(conn, tomo)
         finally:

@@ -486,6 +486,12 @@ button.cita:disabled {
   color: var(--texto);
 }
 
+.ayuda-form {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--texto-tenue);
+}
+
 .form-tomo button {
   align-self: flex-start;
   font-family: inherit;
