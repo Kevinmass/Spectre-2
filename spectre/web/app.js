@@ -455,6 +455,28 @@ function renderFallo(fallo, paginaSolicitada) {
   contenedor.appendChild(renderCitasSalientes(fallo.citas_salientes));
 }
 
+function renderFalloNoEncontrado(contenedor, cita) {
+  contenedor.textContent = "";
+  const aviso = document.createElement("p");
+  aviso.className = "vacio";
+  aviso.textContent =
+    `No hay ningún fallo con la cita Fallos: ${cita} entre lo que está ` +
+    "indexado. Puede que ese tomo todavía no esté cargado, o que la cita no " +
+    "exista.";
+  contenedor.appendChild(aviso);
+
+  const comoTexto = document.createElement("button");
+  comoTexto.type = "button";
+  comoTexto.className = "volver";
+  comoTexto.textContent = `Buscar “${cita}” como texto`;
+  comoTexto.addEventListener("click", () => {
+    activarTab("buscar");
+    document.getElementById("campo-consulta").value = cita;
+    buscar(cita);
+  });
+  contenedor.appendChild(comoTexto);
+}
+
 async function mostrarFallo(cita, paginaOficial) {
   activarTab("fallo");
   const contenedor = document.getElementById("fallo-contenido");
@@ -462,6 +484,10 @@ async function mostrarFallo(cita, paginaOficial) {
 
   try {
     const resp = await fetch(`/api/fallos/${encodeURIComponent(cita)}`);
+    if (resp.status === 404) {
+      renderFalloNoEncontrado(contenedor, cita);
+      return;
+    }
     if (!resp.ok) {
       throw new Error(`${resp.status} ${resp.statusText}`);
     }
@@ -532,10 +558,18 @@ for (const boton of document.querySelectorAll(".tab")) {
   boton.addEventListener("click", () => activarTab(boton.dataset.tab));
 }
 
+// Detecta una consulta que es una cita de Fallos —"348:145", "Fallos: 348:145",
+// "Fallos 348:145"— y la normaliza a "tomo:pagina". Si no lo es, `null`. Es
+// como se busca jurisprudencia de verdad: se conoce la cita y se quiere el
+// fallo, no una lista.
+function citaDe(consulta) {
+  const m = consulta.match(/^\s*(?:fallos\s*:?\s*)?(\d{1,3})\s*:\s*(\d{1,4})\s*$/i);
+  return m ? `${m[1]}:${m[2]}` : null;
+}
+
 // Dispara una búsqueda con la consulta que haya en el campo. Se llama al
-// enviar el formulario y al tocar cualquier filtro: los filtros no viven en
-// una búsqueda, se aplican sobre la que está a la vista (y si no hay ninguna,
-// no pasa nada).
+// tocar cualquier filtro: los filtros no viven en una búsqueda, se aplican
+// sobre la que está a la vista (y si no hay ninguna, no pasa nada).
 function ejecutarBusqueda() {
   const consulta = document.getElementById("campo-consulta").value.trim();
   if (consulta) {
@@ -545,7 +579,16 @@ function ejecutarBusqueda() {
 
 document.getElementById("form-buscar").addEventListener("submit", (ev) => {
   ev.preventDefault();
-  ejecutarBusqueda();
+  const consulta = document.getElementById("campo-consulta").value.trim();
+  if (!consulta) {
+    return;
+  }
+  const cita = citaDe(consulta);
+  if (cita) {
+    mostrarFallo(cita, null);
+  } else {
+    buscar(consulta);
+  }
 });
 
 for (const filtro of document.querySelectorAll(
