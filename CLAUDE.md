@@ -45,7 +45,10 @@ sirve `spectre/web/` estático y expone `GET /api/estado` — tomos + total de
 chunks —, `GET /api/buscar` — PR-21: envuelve `buscar_hibrido`, cachea el
 modelo de embeddings por instancia de app y degrada sola a léxico puro si
 `sentence-transformers` no está, diciéndolo en `modo` — nunca fingiendo
-`hibrido` —, `GET /api/fallos/{cita}` — PR-22: el fallo completo por
+`hibrido` —; PR-A1: la respuesta va **agrupada por fallo** (`search/agrupar.py`,
+módulo aparte de `hybrid.py`): cada resultado es un fallo con sus `pasajes`
+anidados (uno por tipo de sección, el de más puntaje) y `total_pasajes` para
+el contador "N pasajes más" —, `GET /api/fallos/{cita}` — PR-22: el fallo completo por
 secciones + metadatos + citas salientes, recalculadas al vuelo con
 `extraer_citas` (PR-10) sobre el texto ya persistido porque el pipeline
 (PR-19) decidió a propósito no guardarlas en la tabla `citas` (es la materia
@@ -87,11 +90,11 @@ guía de uso sin jerga de programador, escrita para quien solo quiere buscar
 fallos, no tocar el código. Con esto el plan (`docs/plan-spectre.md`, §6/§9)
 quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
 tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
-con su criterio de aceptación (§4-§7). Deuda conocida que arrastra el MVP: la
-tabla `citas` tiene 0 filas (el endpoint las extrae al vuelo, PR-10 nunca las
-persistió — la termina PR-C1), la búsqueda devuelve fragmentos sin agrupar
-por fallo (`hybrid.py` no dedupe — PR-A1), y la ingesta pica 5,3 GB de
-memoria (PR-C4).
+con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
+**Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo).
+Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
+endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
+la ingesta pica 5,3 GB de memoria (PR-C4).
 
 ## Reglas de trabajo
 

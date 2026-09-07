@@ -112,13 +112,19 @@ pendiente: se puede empezar hoy.*
   por materia/rama vía PR-C2, filtro por tipo de parte en PR-C5, y el corpus
   multi-tribunal como D-17 + Tanda E. Detalle en `observacion-01.md` §8.
 
-- [ ] **PR-A1 `[N]` Agrupar los resultados por fallo**
+- [x] **PR-A1 `[N]` Agrupar los resultados por fallo**
   Un resultado = un caso, con sus pasajes anidados y un contador
   ("3 pasajes más en este fallo"). Toca `search/hybrid.py`, `/api/buscar` y el
   render. Conservar el mejor pasaje por tipo de sección, no solo el mejor
   absoluto: una mayoría y una disidencia del mismo fallo son cosas distintas.
   *Acepta:* las 8 consultas de referencia devuelven 10 fallos distintos cada
   una (hoy: entre 2 y 10, promedio 5,25).
+  *Hecho:* módulo nuevo `search/agrupar.py` (no se tocó `hybrid.py` — la
+  fusión quedó como estaba, agrupar es un paso aparte). Medido sobre la base
+  real con las 8 consultas versionadas de PR-15
+  (`docs/qa/consultas-PR-15.md`): antes 6,75 fallos distintos de media
+  (5–9), después 10/10. `total_pasajes` alimenta el contador. Detalle en
+  `docs/qa/bitacora-PR-A1.md`.
 
 - [ ] **PR-A2 `[N]` Filtros en la pantalla**
   Tribunal de origen, tipo de sección y "solo léxico" — el backend ya los
@@ -314,8 +320,9 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0 cerrado** (con salvedad — ver su casilla). Próximo: **PR-A1**
-(agrupar por fallo). PR-A1 a PR-A6 no dependen de nada pendiente.
+Tanda A: **PR-A0 y PR-A1 cerrados**. Próximo: **PR-A2** (filtros en la
+pantalla, con el año como rango). PR-A2 a PR-A6 no dependen de nada
+pendiente.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión

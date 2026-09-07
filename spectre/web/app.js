@@ -153,6 +153,25 @@ function resaltarEn(contenedor, texto, terminos) {
   contenedor.appendChild(document.createTextNode(texto.slice(ultimo)));
 }
 
+function renderPasaje(p, terminos) {
+  const div = document.createElement("div");
+  div.className = "pasaje";
+
+  if (p.seccion_tipo) {
+    const badge = document.createElement("span");
+    badge.className = `badge badge-${p.seccion_tipo}`;
+    badge.textContent = ETIQUETAS_SECCION[p.seccion_tipo] || p.seccion_tipo;
+    div.appendChild(badge);
+  }
+
+  const extracto = document.createElement("p");
+  extracto.className = "extracto";
+  resaltarEn(extracto, p.extracto, terminos);
+  div.appendChild(extracto);
+
+  return div;
+}
+
 function renderResultado(r, terminos) {
   const li = document.createElement("li");
   li.className = "resultado";
@@ -160,22 +179,27 @@ function renderResultado(r, terminos) {
   const encabezado = document.createElement("div");
   encabezado.className = "resultado-encabezado";
 
+  // La página del PDF del mejor pasaje: al clickear la cita se abre el fallo
+  // ahí. Saltar al pasaje exacto dentro del fallo es PR-B2.
+  const paginaPrincipal =
+    r.pasajes.length > 0 ? r.pasajes[0].pagina_oficial : null;
+
   const cita = document.createElement("button");
   cita.type = "button";
   cita.className = "cita";
   cita.textContent = r.cita ? `Fallos: ${r.cita}` : "(sin cita)";
   if (r.cita) {
-    cita.addEventListener("click", () => mostrarFallo(r.cita, r.pagina_oficial));
+    cita.addEventListener("click", () => mostrarFallo(r.cita, paginaPrincipal));
   } else {
     cita.disabled = true;
   }
   encabezado.appendChild(cita);
 
-  if (r.seccion_tipo) {
-    const badge = document.createElement("span");
-    badge.className = `badge badge-${r.seccion_tipo}`;
-    badge.textContent = ETIQUETAS_SECCION[r.seccion_tipo] || r.seccion_tipo;
-    encabezado.appendChild(badge);
+  if (r.fecha) {
+    const fecha = document.createElement("span");
+    fecha.className = "resultado-fecha";
+    fecha.textContent = r.fecha;
+    encabezado.appendChild(fecha);
   }
   li.appendChild(encabezado);
 
@@ -186,10 +210,23 @@ function renderResultado(r, terminos) {
     li.appendChild(caratula);
   }
 
-  const extracto = document.createElement("p");
-  extracto.className = "extracto";
-  resaltarEn(extracto, r.extracto, terminos);
-  li.appendChild(extracto);
+  const pasajes = document.createElement("div");
+  pasajes.className = "pasajes";
+  for (const p of r.pasajes) {
+    pasajes.appendChild(renderPasaje(p, terminos));
+  }
+  li.appendChild(pasajes);
+
+  const ocultos = r.total_pasajes - r.pasajes.length;
+  if (ocultos > 0) {
+    const mas = document.createElement("p");
+    mas.className = "pasajes-mas";
+    mas.textContent =
+      ocultos === 1
+        ? "1 pasaje más en este fallo"
+        : `${ocultos} pasajes más en este fallo`;
+    li.appendChild(mas);
+  }
 
   return li;
 }
