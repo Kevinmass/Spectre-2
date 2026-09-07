@@ -46,10 +46,13 @@ el índice léxico (FTS5) ya se mantiene solo con los triggers de la migración
 `indexar` verifica que el índice vectorial tenga un vector por cada chunk del
 tomo y recién ahí sella `tomos.estado='indexado'` / `indexado_at`.
 
-**Citas.** El plan (§6, lista de PR-19) no incluye una etapa de citas —
-persistirlas es la materia prima del grafo de precedentes, explícitamente
-fuera del MVP (§8.3). La tabla `citas` existe en el esquema desde 0001 pero
-esta cadena no la llena.
+**Citas.** El MVP dejó esto sin hacer a propósito (era materia prima del grafo
+de precedentes, fuera del MVP, §8.3). **PR-C1 lo termina**: la etapa
+`estructurar` corre `extraer_citas` (PR-10) sobre el mismo `texto_del_fallo`
+que usa para los metadatos y vuelca el resultado a la tabla `citas` —una fila
+por precedente citado—, borrando primero las del fallo para que un reintento no
+duplique. No hay etapa ni estado nuevo: la cita es una propiedad estructural
+del fallo y sale del texto que `estructurar` ya tiene en la mano.
 """
 
 from __future__ import annotations
@@ -213,7 +216,11 @@ def _h_segmentar(conn: sqlite3.Connection, job: Job) -> None:
 
 
 def _h_estructurar(conn: sqlite3.Connection, job: Job) -> None:
-    from spectre.corpus.fallo import extraer_metadatos, texto_del_fallo
+    from spectre.corpus.fallo import (
+        extraer_citas,
+        extraer_metadatos,
+        texto_del_fallo,
+    )
 
     repo = Repo(conn, auto_commit=False)
     tomo = _tomo_o_reventar(repo, int(job.payload["tomo_id"]))
@@ -242,6 +249,16 @@ def _h_estructurar(conn: sqlite3.Connection, job: Job) -> None:
             tribunal_origen=meta.tribunal_origen,
             tipo_recurso=meta.tipo_recurso,
         )
+
+        # Citas salientes a precedentes (PR-C1, termina PR-10). Borrar primero:
+        # un reintento de esta etapa no debe acumular.
+        repo.borrar_citas_de_fallo(f.id)
+        citas = extraer_citas(texto)
+        if citas:
+            repo.insert_citas(
+                f.id,
+                [(c.tomo_citado, c.pagina_citada, c.contexto) for c in citas],
+            )
     repo.actualizar_tomo(tomo.id, estado="estructurado")
 
 

@@ -52,11 +52,15 @@ modelo de embeddings por instancia de app y degrada sola a léxico puro si
 `hibrido` —; PR-A1: la respuesta va **agrupada por fallo** (`search/agrupar.py`,
 módulo aparte de `hybrid.py`): cada resultado es un fallo con sus `pasajes`
 anidados (uno por tipo de sección, el de más puntaje) y `total_pasajes` para
-el contador "N pasajes más" —, `GET /api/fallos/{cita}` — PR-22: el fallo completo por
-secciones + metadatos + citas salientes, recalculadas al vuelo con
-`extraer_citas` (PR-10) sobre el texto ya persistido porque el pipeline
-(PR-19) decidió a propósito no guardarlas en la tabla `citas` (es la materia
-prima de un grafo de precedentes fuera del MVP, §8.3) — y `GET
+el contador "N pasajes más" —, `GET /api/fallos/{cita}` — PR-22 + PR-C1: el
+fallo completo por secciones + metadatos + citas **salientes** (a qué
+precedentes cita) y **entrantes** (qué fallos del corpus indexado lo citan).
+PR-C1 terminó lo que PR-10 dejó a medias: la etapa `estructurar` del pipeline
+persiste las salientes en la tabla `citas` (una fila por precedente, con
+`extraer_citas`), y el endpoint las lee de ahí; si un tomo se indexó antes de
+PR-C1 y no tiene filas, se recalculan al vuelo como hacía PR-22 (las
+entrantes, en cambio, sí necesitan el reindexado). Es la materia prima del
+grafo de precedentes (§8.3) — y `GET
 /api/tomos/{numero}/pdf` — sirve el PDF del tomo desde disco, para el enlace
 "ver en el PDF" con `#page=N` calculado con `pagina_oficial +
 tomos.offset_pagina` —, y dos rutas que escriben (PR-23): `POST
@@ -82,7 +86,9 @@ límites de palabra Unicode, "sin" ya no marca "sino"—, etiqueta de sección
 mayoría/voto/disidencia/dictamen, y una fila de filtros (PR-A2): tribunal,
 sección, rango de años y "solo texto", que se aplican sobre la búsqueda a la
 vista—, la vista de fallo muestra el
-texto completo por sección, metadatos, citas salientes y el enlace al PDF en
+texto completo por sección, metadatos, citas salientes y entrantes (PR-C1:
+"Citado por", con la carátula y la cita del fallo citante, clickeable) y el
+enlace al PDF en
 la página exacta del fragmento que trajo el resultado, y Biblioteca (PR-23)
 lista los tomos con su progreso (sondeado cada 2s mientras la pestaña está a
 la vista) y tiene los dos formularios —indexar por `csjn_tomo_id` o subir un
@@ -109,9 +115,13 @@ resultados agrupados por fallo, filtros en la UI (año por rango), resaltado y
 extractos limpios, búsqueda por cita, y un set de evaluación
 (`docs/qa/eval-busqueda.md`, línea de base recall@10 0,90 · MRR 0,71) para
 medir cambios de ranking.
-Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
-endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
-la ingesta pica 5,3 GB de memoria (PR-C4).
+**Tanda C en curso.** PR-C1 cerrado: la etapa `estructurar` del pipeline
+persiste las citas salientes en la tabla `citas` (una fila por precedente) y
+`GET /api/fallos/{cita}` devuelve además las entrantes ("Citado por"). Con
+esto la tabla `citas` deja de tener 0 filas; hay que **reindexar** los tomos
+cargados antes de PR-C1 para llenarla (mientras tanto el endpoint recae en el
+recálculo al vuelo para las salientes).
+Deuda conocida que sigue abierta: la ingesta pica 5,3 GB de memoria (PR-C4).
 
 ## Reglas de trabajo
 
@@ -322,8 +332,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
 `data/tomos/348.pdf` (Fallos, Tomo 348, 968 páginas, ~126 fallos). Los criterios
 de aceptación de las Fases 1 a 3 son números medidos sobre ese tomo: offset de
 página 6, 126 entradas en el índice, fallo más largo 57 páginas, mediana 4
-páginas, ~1.041 chunks, 887 citas. Un resultado lejos de esos números indica que
-algo aguas arriba se rompió.
+páginas, ~1.041 chunks, 887 *referencias* `Fallos:` (`contar_referencias`;
+medido 934 con la segmentación real de 133 fallos — PR-10). Ojo: la tabla
+`citas` guarda una fila **por precedente**, no por referencia, así que tiene
+bastantes más (~2.006 para el Tomo 348, PR-10/PR-C1). Un resultado lejos de
+esos números indica que algo aguas arriba se rompió.
 
 Desde PR-08 hay también `data/tomos/349.pdf` (Tomo 349, el más reciente). Cuando
 un PR mida algo sobre tomo real, correrlo sobre **los dos** para no sesgar con un

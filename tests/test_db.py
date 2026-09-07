@@ -684,6 +684,93 @@ def test_filtrar_chunks_sin_seccion_no_matchea_filtro_de_tipo(repo):
     assert repo.filtrar_chunks([chunk_id], tipo_seccion="mayoria") == set()
 
 
+# --- citas (PR-C1: persistir las citas salientes y leer las entrantes) - #
+
+
+def test_insert_y_listar_citas_de_fallo(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:100")
+    n = repo.insert_citas(
+        fid,
+        [(311, 2478, "cf. Fallos: 311:2478 ..."), (340, 1084, "... Fallos: 340:1084")],
+    )
+    assert n == 2
+    citas = repo.list_citas_de_fallo(fid)
+    assert [(c.tomo_citado, c.pagina_citada) for c in citas] == [
+        (311, 2478),
+        (340, 1084),
+    ]
+    assert citas[0].contexto.startswith("cf. Fallos")
+    assert repo.contar_citas_de_tomo(tomo_id) == 2
+
+
+def test_borrar_citas_de_fallo_es_idempotente(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:100")
+    repo.insert_citas(fid, [(311, 2478, "x")])
+    assert repo.borrar_citas_de_fallo(fid) == 1
+    assert repo.list_citas_de_fallo(fid) == []
+    assert repo.borrar_citas_de_fallo(fid) == 0  # nada que borrar, sin error
+
+
+def test_borrar_fallos_arrastra_las_citas(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:100")
+    repo.insert_citas(fid, [(311, 2478, "x"), (340, 1084, "y")])
+    assert repo.borrar_fallos(tomo_id) == 1
+    assert repo.contar_citas_de_tomo(tomo_id) == 0  # cascada de la FK
+
+
+def test_citas_entrantes_encuentra_quien_cita_dentro_del_corpus(repo):
+    tomo_id = repo.insert_tomo(348)
+    citado = repo.insert_fallo(
+        tomo_id, "Citado c/ Estado", cita="348:100", pagina_inicio=100, pagina_fin=110
+    )
+    citante = repo.insert_fallo(
+        tomo_id, "Citante c/ Otro", cita="348:200", pagina_inicio=200, pagina_fin=205
+    )
+    # el citante apunta a una página del medio del citado (no a su inicio)
+    repo.insert_citas(citante, [(348, 105, "... conf. Fallos: 348:105 ...")])
+
+    entrantes = repo.citas_entrantes(citado)
+    assert len(entrantes) == 1
+    assert entrantes[0].cita == "348:200"
+    assert entrantes[0].caratula == "Citante c/ Otro"
+    assert entrantes[0].pagina_citada == 105
+
+    # y el citante no tiene entrantes
+    assert repo.citas_entrantes(citante) == []
+
+
+def test_citas_entrantes_excluye_la_auto_cita(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(
+        tomo_id, "A c/ B", cita="348:100", pagina_inicio=100, pagina_fin=110
+    )
+    repo.insert_citas(fid, [(348, 100, "se remite a Fallos: 348:100")])
+    assert repo.citas_entrantes(fid) == []
+
+
+def test_citas_entrantes_ignora_otro_tomo(repo):
+    t348 = repo.insert_tomo(348)
+    t349 = repo.insert_tomo(349)
+    citado = repo.insert_fallo(
+        t348, "Citado", cita="348:100", pagina_inicio=100, pagina_fin=110
+    )
+    # un fallo del 349 que cita 349:105 (mismo número de página, otro tomo)
+    otro = repo.insert_fallo(
+        t349, "Otro", cita="349:200", pagina_inicio=200, pagina_fin=210
+    )
+    repo.insert_citas(otro, [(349, 105, "Fallos: 349:105")])
+    assert repo.citas_entrantes(citado) == []
+
+
+def test_citas_entrantes_sin_pagina_inicio_es_vacio(repo):
+    tomo_id = repo.insert_tomo(348)
+    fid = repo.insert_fallo(tomo_id, "A c/ B", cita="348:100")  # sin páginas
+    assert repo.citas_entrantes(fid) == []
+
+
 # --- auto_commit=False (PR-19: uso dentro de un handler del job runner) - #
 
 

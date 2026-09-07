@@ -2,6 +2,8 @@
 
 from spectre.db.repo import (
     Chunk,
+    Cita,
+    CitaEntrante,
     Fallo,
     Pagina,
     Repo,
@@ -15,6 +17,8 @@ from spectre.db.repo import (
 
 __all__ = [
     "Chunk",
+    "Cita",
+    "CitaEntrante",
     "Fallo",
     "Pagina",
     "Repo",

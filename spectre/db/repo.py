@@ -190,6 +190,33 @@ class Chunk:
     embedding_at: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class Cita:
+    """Una fila de `citas`: una referencia `Fallos: <tomo_citado>:<pagina_citada>`
+    hallada en el texto del fallo `fallo_id`. Una cadena con un solo prefijo
+    (`Fallos: 301:1149; 302:1078`) da una fila por precedente. La llena la etapa
+    `estructurar` del pipeline (PR-C1), con `extraer_citas` (PR-10)."""
+
+    id: int
+    fallo_id: int
+    tomo_citado: int | None
+    pagina_citada: int | None
+    contexto: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CitaEntrante:
+    """Un fallo del corpus indexado que cita al fallo consultado. `cita` y
+    `caratula` son del fallo *citante*; `pagina_citada` es la página que
+    escribió (dentro del rango del fallo consultado); `contexto` es el recorte
+    alrededor de la cita en el texto del citante."""
+
+    cita: str | None
+    caratula: str
+    pagina_citada: int | None
+    contexto: str | None
+
+
 def _tomo(row: sqlite3.Row | None) -> Tomo | None:
     return Tomo(**row) if row is not None else None
 
@@ -654,3 +681,86 @@ class Repo:
         )
         self._commit()
         return len(datos)
+
+    # -- citas -------------------------------------------------------- #
+
+    def insert_citas(
+        self,
+        fallo_id: int,
+        filas: Iterable[tuple[int | None, int | None, str | None]],
+    ) -> int:
+        """Inserta en lote las citas salientes de un fallo. Cada fila es
+        `(tomo_citado, pagina_citada, contexto)` — lo que da `extraer_citas`
+        (PR-10), un precedente por fila. La llena la etapa `estructurar` del
+        pipeline (PR-C1). Devuelve cuántas insertó."""
+        datos = [(fallo_id, t, p, c) for t, p, c in filas]
+        self.conn.executemany(
+            "INSERT INTO citas (fallo_id, tomo_citado, pagina_citada, contexto)"
+            " VALUES (?, ?, ?, ?)",
+            datos,
+        )
+        self._commit()
+        return len(datos)
+
+    def borrar_citas_de_fallo(self, fallo_id: int) -> int:
+        """Borra las citas salientes de un fallo. Reintentar la etapa
+        `estructurar` (PR-19/PR-C1) no acumula citas duplicadas. Devuelve
+        cuántas borró."""
+        cur = self.conn.execute("DELETE FROM citas WHERE fallo_id = ?", (fallo_id,))
+        self._commit()
+        return cur.rowcount
+
+    def list_citas_de_fallo(self, fallo_id: int) -> list[Cita]:
+        """Las citas salientes de un fallo, en orden de aparición (por `id`)."""
+        return [
+            Cita(**row)
+            for row in self.conn.execute(
+                "SELECT * FROM citas WHERE fallo_id = ? ORDER BY id", (fallo_id,)
+            )
+        ]
+
+    def contar_citas_de_tomo(self, tomo_id: int) -> int:
+        """Cuántas filas de `citas` cuelgan de los fallos de este tomo. Es el
+        número del criterio de aceptación de PR-C1 (medido sobre el Tomo 348)."""
+        return int(
+            self.conn.execute(
+                "SELECT count(*) FROM citas c JOIN fallos f ON f.id = c.fallo_id"
+                " WHERE f.tomo_id = ?",
+                (tomo_id,),
+            ).fetchone()[0]
+        )
+
+    def citas_entrantes(self, fallo_id: int) -> list[CitaEntrante]:
+        """Qué fallos del corpus indexado citan a `fallo_id`. Cruza
+        `citas.tomo_citado` con el *número* del tomo del fallo consultado y
+        `citas.pagina_citada` con su rango de páginas (`Fallos: N:P` apunta a la
+        página de inicio de un fallo, pero se acepta cualquier página dentro del
+        rango: una cita puede señalar un considerando del medio). Excluye la
+        auto-cita (un fallo que se cita a sí mismo). Vacío si el fallo no tiene
+        página de inicio o no está asociado a un tomo."""
+        fallo = self.get_fallo(fallo_id)
+        if fallo is None or fallo.pagina_inicio is None:
+            return []
+        tomo = self.get_tomo(fallo.tomo_id)
+        if tomo is None:
+            return []
+        pagina_fin = (
+            fallo.pagina_fin if fallo.pagina_fin is not None else fallo.pagina_inicio
+        )
+        return [
+            CitaEntrante(
+                cita=row["cita"],
+                caratula=row["caratula"],
+                pagina_citada=row["pagina_citada"],
+                contexto=row["contexto"],
+            )
+            for row in self.conn.execute(
+                "SELECT f.cita AS cita, f.caratula AS caratula,"
+                "       c.pagina_citada AS pagina_citada, c.contexto AS contexto"
+                " FROM citas c JOIN fallos f ON f.id = c.fallo_id"
+                " WHERE c.tomo_citado = ? AND c.pagina_citada BETWEEN ? AND ?"
+                "   AND f.id <> ?"
+                " ORDER BY f.cita",
+                (tomo.numero, fallo.pagina_inicio, pagina_fin, fallo_id),
+            )
+        ]
