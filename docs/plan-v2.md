@@ -279,7 +279,7 @@ pendiente: se puede empezar hoy.*
   (`tomo348_cuerpo_p31-40.pdf`, en la suite rápida) el pipeline persiste 8
   citas y el test lo fija. Detalle en `docs/qa/bitacora-PR-C1.md`.
 
-- [ ] **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
+- **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
   La Secretaría de Jurisprudencia publica sumarios consultables por tomo y
   página — exactamente la clave que ya extraemos. Contenido curado por la
   Corte, gratis, que hace dos cosas: hace legible cada resultado **y** trae
@@ -287,13 +287,33 @@ pendiente: se puede empezar hoy.*
   fallo. Esas voces son la vía realista para los filtros por **materia y rama
   del derecho** que pidió la observación 01 (p. ej. "derecho administrativo",
   "contratación pública") — no hay que inventar una taxonomía, ya existe.
-  *Empieza con un spike:* (1) confirmar que los sumarios se pueden consultar
-  programáticamente; (2) ver en qué formato vienen — si es PDF **no
-  seleccionable** (imagen escaneada), hay que decidir si entra una
-  herramienta de OCR ahora (hoy está en "fuera de v2", §9) o si se busca otra
-  fuente; (3) ver si las voces vienen estructuradas o hay que parsearlas.
   *Acepta:* cada resultado muestra su sumario oficial cuando existe; se puede
   filtrar la búsqueda por al menos una voz y el conteo cambia.
+  **Partido en dos por tamaño (07/09/2026):**
+
+  - [x] **PR-C2a — spike + cliente de sumarios.**
+    Spike (`docs/qa/spike-C2-sumarios.md`): los sumarios **sí** se consultan
+    programáticamente, en un flujo HTTP de 3 pasos (GET sesión → POST
+    `buscar.html` con `filter.tomo`/`filter.pagina` → GET `paginarSumarios`
+    JSON); vienen como **JSON con texto seleccionable — no hace falta OCR**;
+    las **voces vienen estructuradas** (string `" - "` por sumario, + un
+    tesauro con autocompletado `getVoces` que da `{codigo, valor}`). Un fallo
+    puede tener varios sumarios. Público, sin credenciales, reCAPTCHA no
+    validado en ese flujo; WAF con firma de cliente que `urllib` pasa.
+    *Entregado:* `spectre/corpus/csjn/sumarios.py` (`buscar_sumarios(tomo,
+    pagina)`, `buscar_voces(termino)`; `TransporteHTTP` inyectable), el
+    comando `spectre csjn sumario <tomo> <pagina>` (mide, no persiste), y
+    `tests/test_sumarios.py` (parseo puro + `red` contra el sitio real).
+    Detalle en `docs/qa/bitacora-PR-C2a.md`.
+
+  - [ ] **PR-C2b — persistir + mostrar el sumario + filtro por voz.**
+    Tabla(s) `sumarios`/`voces` (+ `fallo_voces`) con su migración; traer los
+    sumarios por fallo en la ingesta (o un `spectre sumarios sync`) y
+    persistirlos; `/api/fallos/{cita}` y los resultados de `/api/buscar`
+    muestran el/los sumario(s); filtro por voz en `/api/buscar` + la UI (input
+    con autocompletado sobre el tesauro). Evaluar `analisisDocumental.
+    materiaSecretaria` para el filtro por materia/rama. **Acá se cumple el
+    criterio de aceptación de PR-C2.**
 
 - [ ] **PR-C5 `[N]` Filtro por tipo de parte**
   La observación 01 pidió filtrar por "las partes, p. ej. que una sea una
@@ -385,7 +405,9 @@ jurisprudencia.
 OCR de tomos/fuentes escaneados sigue acá **por defecto**, pero puede entrar
 antes si el spike de PR-C2 o el de PR-E0 encuentran que una fuente que
 queremos sí o sí viene sólo como imagen. Esa decisión se toma con el número
-del spike delante, no ahora.
+del spike delante, no ahora. **El spike de PR-C2 (PR-C2a, 07/09/2026) ya
+respondió por su lado: los sumarios de la CSJN vienen como JSON con texto
+seleccionable, no disparan OCR.** Queda el spike de PR-E0.
 
 ---
 
@@ -398,10 +420,12 @@ MRR 0,71) para medir lo que venga.
 
 En curso: **Tanda C.** La segunda sesión de observación no se pudo hacer
 todavía, así que la Tanda B sigue esperando y se avanza por C (decidido con
-Kevin el 07/09/2026). **PR-C1 cerrado** (citas salientes persistidas en el
-pipeline + citas entrantes en el endpoint y la vista de fallo). Próximo a
-elección: PR-C2 (sumarios oficiales + voces, arranca con spike), PR-C5
-(filtro por tipo de parte) o los `[V]` PR-C3 (reranker, ya tiene el set de
+Kevin el 07/09/2026). **PR-C1 cerrado** (citas). **PR-C2a cerrado**: spike de
+sumarios + el cliente `spectre/corpus/csjn/sumarios.py` (los sumarios y sus
+voces se consultan por tomo/página, JSON, sin OCR; detalle en
+`docs/qa/spike-C2-sumarios.md`). Próximo a elección: **PR-C2b** (persistir el
+sumario + mostrarlo + filtro por voz — cierra el criterio de PR-C2), PR-C5
+(filtro por tipo de parte), o los `[V]` PR-C3 (reranker, ya tiene el set de
 PR-A6) / PR-C4 (memoria de la ingesta).
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
@@ -410,7 +434,8 @@ con registro en vivo antes de arrancar B1–B3. Excepciones que no dependen de
 eso y se pueden adelantar: **PR-B1** (reflow de párrafos) y **PR-B6** (más
 resultados con paginación).
 
-Tanda C: **en curso**. PR-C1 cerrado; el resto sin arrancar.
+Tanda C: **en curso**. PR-C1 y PR-C2a cerrados; PR-C2b / C5 / C3 / C4 sin
+arrancar.
 
 Tandas D, E: sin arrancar. D espera la decisión D-16. E arranca por
 PR-E0 (spike) en cuanto se le quiera dar prioridad; D-17 ya está tomada.

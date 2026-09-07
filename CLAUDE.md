@@ -32,7 +32,12 @@ vocabulario fijado por el CHECK de `0004_tomos_estado_check.sql`),
 `spectre/corpus/csjn/` (`catalog`: lista los tomos del sitio oficial — número,
 volumen, año, id CSJN — sin persistir; `download`: baja el PDF de un tomo con
 reintentos y caché por archivo, sin resume por Range —el servidor lo ignora—,
-así que "reanudar" es a nivel de archivo completo), `spectre/chunking/`
+así que "reanudar" es a nivel de archivo completo; `sumarios` (PR-C2a):
+`buscar_sumarios(tomo, pagina)` trae los sumarios oficiales de la Secretaría
+de Jurisprudencia y sus voces —flujo HTTP de 3 pasos, JSON, sin OCR, spike en
+`docs/qa/spike-C2-sumarios.md`—, `buscar_voces(termino)` autocompleta el
+tesauro; no persiste —persistir + mostrar + filtrar por voz es PR-C2b—),
+`spectre/chunking/`
 (`chunker`: ventanas de ~400 palabras por sección), `spectre/embed/`
 (`base.EmbeddingModel` + `local_st.ModeloLocalST`, sentence-transformers
 detrás del extra opcional `[embed]`), `spectre/index/`
@@ -124,6 +129,10 @@ persiste las citas salientes en la tabla `citas` (una fila por precedente) y
 esto la tabla `citas` deja de tener 0 filas; hay que **reindexar** los tomos
 cargados antes de PR-C1 para llenarla (mientras tanto el endpoint recae en el
 recálculo al vuelo para las salientes).
+PR-C2a cerrado: el spike de sumarios (`docs/qa/spike-C2-sumarios.md`) y el
+cliente `spectre/corpus/csjn/sumarios.py` — los sumarios oficiales y sus voces
+se consultan por tomo/página (JSON, sin OCR); todavía no se persisten ni se
+muestran (eso es PR-C2b).
 Deuda conocida que sigue abierta: la ingesta pica 5,3 GB de memoria (PR-C4).
 
 ## Reglas de trabajo
@@ -210,6 +219,9 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   - `spectre csjn download <tomo_id> <destino> [--forzar]` — baja el PDF de
     un tomo (el `tomo_id` lo da `csjn catalog`) con reintentos y caché: si
     `destino` ya existe no pide nada, salvo `--forzar`. Necesita red real.
+  - `spectre csjn sumario <tomo> <pagina>` — sumarios oficiales de la CSJN de
+    ese fallo (carátula, fecha, voces, texto). Mide, no persiste (PR-C2a).
+    Necesita red real; un fallo puede tener varios sumarios, o ninguno.
   - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
@@ -313,10 +325,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   `slow` y corre contra el índice real local (`data/spectre.db`); mide
   recall@10 / MRR con un piso de regresión. Línea de base y método en
   `docs/qa/eval-busqueda.md`.
-- `red` (PR-16): tests que pegan contra un sitio real por HTTP (el catálogo de
-  la CSJN, `spectre/corpus/csjn/catalog.py`). Rápidos (segundos), pero CI no
-  depende de que el sitio externo esté arriba, así que quedan afuera del
-  default igual que `slow`: `pytest -m red`.
+- `red` (PR-16): tests que pegan contra un sitio real por HTTP — el catálogo de
+  la CSJN (`spectre/corpus/csjn/catalog.py`) y, desde PR-C2a, los sumarios
+  (`spectre/corpus/csjn/sumarios.py`, `tests/test_sumarios.py`). Rápidos
+  (segundos), pero CI no depende de que el sitio externo esté arriba, así que
+  quedan afuera del default igual que `slow`: `pytest -m red`.
 - `tests/verificar_*.mjs`: las verificaciones que no son Python. Cargan
   `spectre/web/app.js` con un DOM de mentira (`vm`) y chequean funciones
   puras: `verificar_resaltado.mjs` (PR-A3, `terminosDe` / `resaltarEn`),
