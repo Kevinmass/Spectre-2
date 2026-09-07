@@ -72,3 +72,70 @@ que entrega esta PR es el instrumento listo para usar, no los hallazgos.
 - El instrumento asume que la usuaria trae un caso real ese día. Si no tiene
   ninguno entre manos, hay que reagendar: buscar sobre un caso inventado no
   sirve para esto.
+
+---
+
+## Cierre (sesión hecha)
+
+Kevin corrió la observación y trajo la devolución al chat como **resumen de
+conclusiones**, no como registro en vivo (sin búsqueda por búsqueda, sin
+transcripción textual, sin línea de tiempo).
+
+### Qué se hizo en el cierre
+
+- `docs/qa/observacion-01.md`: se completó §7 (cierre) y §8 (síntesis) con lo
+  que devolvió la usuaria; §3, §4 y §6 quedan como plantilla para una próxima
+  observación con registro en vivo, con una nota explícita de por qué no se
+  llenaron. Encabezado actualizado al estado "sesión hecha, registrada como
+  resumen".
+- `docs/plan-v2.md`: casilla de PR-A0 marcada `[x]`, con una salvedad de tres
+  renglones sobre el formato de la devolución y lo que abre.
+
+### Qué devolvió la usuaria (resumen)
+
+- "El programa funciona bien." Ninguna objeción de que algo esté roto o sea
+  confuso — todas las objeciones son de **alcance**.
+- **Más filtros de búsqueda:** por tribunal, por antigüedad, por rama del
+  derecho (ej. derecho administrativo), por tema/materia (ej. contratación
+  pública), por tipo de parte (ej. que una parte sea una empresa).
+- **Corpus multi-tribunal:** además de los Fallos de la CSJN, fallos de otras
+  cortes — nombró el Tribunal Superior de Justicia de Córdoba.
+
+### Qué decidí por mi cuenta en el cierre
+
+- **No fabriqué el detalle que no existe.** El §2 del plan (los seis
+  problemas de UX) no se confirmó ni se descartó porque la usuaria no habló
+  de eso; lo dejé dicho así, sin inventar fricciones. La Tanda B queda
+  marcada como "sin validar con usuaria".
+- **Separé el resumen crudo (§7-§8.4) de la propuesta de cambios al plan
+  (§8.5).** No toqué la estructura de Tandas de `plan-v2.md` — eso queda para
+  que Kevin lo apruebe. La casilla marcada y la salvedad son lo único que
+  cambié del plan.
+- **Corregí el supuesto "son QoL, no suma trabajo"** en la síntesis: vale
+  para filtrar por tribunal y por antigüedad (el backend ya tiene el dato);
+  no vale para rama / materia / tipo de parte (no hay dato estructurado) ni
+  para multi-tribunal (rehace la ingesta).
+- **Spike de fuentes de otras cortes:** hice un primer barrido web (está en
+  §8.2.B de `observacion-01.md`) — Poder Judicial de Córdoba publica PDFs
+  anuales de la Sala Civil y Comercial del TSJ; SAIJ / datos.jus.gob.ar es
+  el candidato más fuerte para un corpus multi-jurisdicción normalizado.
+  No es una investigación cerrada, es de dónde seguir.
+
+### Qué verifiqué
+
+- Los filtros que `spectre/search/hybrid.py::buscar_hibrido` soporta hoy:
+  `anio`, `tribunal_origen`, `tipo_seccion` (parámetros de la función, líneas
+  66-68). De ahí sale qué pedido es "exponer" y cuál es "dato nuevo".
+- `spectre serve` / `app.js`: el buscador queda `disabled` con
+  `estado.chunks === 0` — la sesión necesitaba la base real, se asume que
+  Kevin la usó así.
+- Búsquedas web (2026-09): jurisprudencia TSJ Córdoba y SAIJ jurisprudencia
+  provincial — resultados y límites anotados en §8.2.B.
+
+### Dudas abiertas
+
+- Si el pedido de multi-tribunal se toma, hace falta una decisión tipo D-16
+  (¿D-17?) antes de planificar: SAIJ como fuente única normalizada vs. bajar
+  PDFs corte por corte. Está propuesto en §8.5, sin decidir.
+- La Tanda B necesita todavía una observación con registro en vivo. Este
+  cierre no la sustituye.

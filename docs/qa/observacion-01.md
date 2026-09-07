@@ -1,10 +1,17 @@
 # Observación 01 — Primera usuaria buscando jurisprudencia
 
-> **Estado: sesión pendiente de correr.** Este archivo es el instrumento
-> (encuadre + reglas + plantilla de captura). Los bloques marcados
-> `_(completar en la sesión)_` y la sección **Síntesis** los llena Kevin
-> después de sentarse a mirar. Recién ahí se marca la casilla de PR-A0 en
-> `docs/plan-v2.md` y se cierra la PR.
+> **Estado: sesión hecha. Registrada como resumen, no con la plantilla en
+> vivo.** Kevin observó a la primera usuaria y trajo la devolución como un
+> resumen de conclusiones (no búsqueda por búsqueda, sin transcripción
+> textual ni línea de tiempo). Lo que sí quedó claro está en la **Síntesis
+> (§8)**; §4 y §6 no se pudieron completar con este formato y quedan como
+> plantilla para una próxima observación. La casilla de PR-A0 en
+> `docs/plan-v2.md` se marca con este archivo.
+>
+> **Límite de esta observación:** ninguno de los seis problemas del §2 del
+> plan apareció en la devolución —ni confirmado ni desmentido—. La usuaria,
+> sin que se le preguntara, fue directo a *qué se puede filtrar* y *qué
+> corpus hay*. La Tanda B sigue sin validación de usuaria (ver §8.3).
 
 Corresponde a **PR-A0** del plan v2 (§4). No es código: es sentarse a mirar a
 la primera usuaria buscar cinco cosas que necesite de verdad, sin guiarla y
@@ -65,15 +72,18 @@ justamente sale de acá.
       *¿qué caso o consulta tenés entre manos ahora, en el trabajo real?*
       De ahí salen las cinco búsquedas; no se inventan.
 
-**Contexto de la usuaria** _(completar en la sesión)_:
-
-- Caso / tema real que trae:
-- Cómo buscaría esto hoy sin Spectre (SAIJ, Google, un PDF que ya tiene, un
-  colega):
+**Contexto de la usuaria** — no registrado. La devolución llegó como resumen
+posterior; no se anotó el caso puntual que trajo ni cómo lo resolvería hoy
+sin Spectre.
 
 ---
 
 ## 4. Las cinco búsquedas
+
+> **No se capturó búsqueda por búsqueda en esta sesión.** La usuaria
+> devolvió conclusiones, no una traza de uso. El detalle que sí quedó está
+> en §8. La plantilla de abajo queda para la próxima observación —conviene
+> una, con registro en vivo, antes de arrancar el rediseño de la Tanda B.
 
 No hay guion. Se le pide: **"buscá cinco cosas que necesitarías para ese
 caso"**, y se la deja. Una plantilla por búsqueda; llenar durante o
@@ -118,10 +128,10 @@ la usuaria no rozó.
 
 ---
 
-## 6. Línea de tiempo cruda _(completar en la sesión)_
+## 6. Línea de tiempo cruda
 
-Un renglón por fricción, con el minuto aproximado. No editar después: es el
-registro en bruto.
+Sin registro en bruto en esta sesión (ver nota del §4). Plantilla para la
+próxima:
 
 | min | qué pasó | palabras de la usuaria |
 |-----|----------|------------------------|
@@ -131,60 +141,138 @@ registro en bruto.
 
 ## 7. Cierre
 
-Después de las cinco búsquedas, recién ahí se puede conversar. Tres
-preguntas, respuestas textuales:
+Reconstruido del resumen de Kevin. `[textual]` = palabras de la usuaria;
+`[inferido]` = lectura de Kevin / mía sobre lo que dijo.
 
-1. **¿Qué te faltó** para resolver lo que viniste a resolver?
-2. **¿Lo volverías a abrir** la próxima vez que tengas una consulta así?
-   ¿Por qué sí / no?
-3. **¿Qué esperabas que estuviera** y no estaba?
-
-_(completar en la sesión)_
+1. **¿Qué te faltó?** — Más maneras de filtrar la búsqueda: por qué tribunal
+   dictó el fallo, por si es de derecho administrativo, por antigüedad, por
+   tema (ejemplo que dio: *contratación pública*) y por las partes (ejemplo:
+   *que una de las partes sea una empresa*). Y que el corpus no sea sólo el
+   "rejunte de fallos que recopila la Corte Suprema": pidió sumar fallos de
+   otras cortes, nombró el **Tribunal Superior de Justicia de la Provincia
+   de Córdoba**.
+2. **¿Lo volverías a abrir?** — `[inferido]` Sí. Dijo que "el programa
+   funciona bien"; las objeciones fueron todas de alcance, no de que algo
+   estuviera roto o fuera confuso.
+3. **¿Qué esperabas que estuviera y no estaba?** — Los filtros del punto 1 y
+   jurisprudencia de tribunales fuera de la CSJN.
 
 ---
 
-## 8. Síntesis _(completar después, con la sesión terminada)_
+## 8. Síntesis
 
-### 8.1 Las cinco fricciones más caras, ordenadas por impacto
+### 8.1 Lo que pidió la usuaria
 
-Para cada una: qué es, a qué problema del §2 corresponde (o "nuevo"), y a qué
-PR de la Tanda A o B toca.
+No hubo fricciones observadas (no se registró el uso). Lo que hubo fue una
+lista de faltantes. Ordenada por lo que cuesta darla, no por impacto —el
+impacto relativo no se midió:
 
-1.
-2.
-3.
-4.
-5.
+| # | Pedido | ¿Hay dato hoy? | Esfuerzo | Dónde cae |
+|---|--------|----------------|----------|-----------|
+| 1 | Filtrar por **tribunal de origen** | Sí — `tribunal_origen` ya se extrae y `buscar_hibrido` ya filtra por él | Bajo — es exponerlo en la UI | **PR-A2**, tal cual está escrito |
+| 2 | Filtrar por **antigüedad** | Parcial — hay `anio`, pero es match exacto | Bajo-medio — pasar `anio` a rango / "últimos N años" en backend + UI | **PR-A2**, con alcance ampliado |
+| 3 | Filtrar por **tipo de parte** (p. ej. "una es una empresa") | Parcial — `partes` se extraen por fallo (PR-08), pero no su naturaleza (persona / empresa / Estado / organismo) | Medio — clasificar entidades sobre los strings de partes, columna nueva, backfill | PR nuevo (Tanda C) |
+| 4 | Filtrar por **área del derecho** (p. ej. "derecho administrativo") | No — nada clasifica los fallos por rama | Alto — taxonomía + clasificación + columna + backfill | PR nuevo, o re-scope de **PR-C2** |
+| 5 | Filtrar por **tema / materia** (p. ej. "contratación pública") | No como faceta estructurada — hoy eso lo hace, difuso, la búsqueda semántica | Alto — misma ruta que #4; la vía realista son los **sumarios oficiales con "voces"** de la CSJN (PR-C2) | Re-scope de **PR-C2** |
+| 6 | **Corpus multi-tribunal** (TSJ Córdoba y otras) | No — todo el pipeline es CSJN-específico | Muy alto — es un proyecto, no un PR | Decisión nueva (ver §8.2) |
+
+**Nota sobre "son QoL, no debería sumar mucho trabajo":** vale para #1 y #2.
+Del #3 al #6 no: #3–#5 necesitan datos que hoy no existen (clasificación de
+partes, de rama, de materia), y #6 rehace la ingesta. Ver §8.2.
 
 ### 8.2 Hallazgos que el relevamiento no tenía
 
-Cosas que aparecieron en la sesión y no están en los seis problemas del §2 ni
-en los pendientes chicos.
+- **A) La batería de filtros que la usuaria quiere es más rica que la que el
+  backend soporta.** Hoy `buscar_hibrido` filtra por `anio`, `tribunal_origen`
+  y `tipo_seccion`. El §2.2 del plan ("la API tiene filtros que la UI no
+  muestra") daba por hecho que exponer esos tres alcanzaba. Esta sesión dice
+  que no: los filtros que una abogada usa para acotar jurisprudencia son
+  **materia, rama del derecho y tipo de parte**, y ninguno existe como dato
+  estructurado. La ruta más barata hacia materia/rama son los **sumarios
+  oficiales de la CSJN (PR-C2)**, que traen descriptores ("voces") curados
+  por la Secretaría de Jurisprudencia — conviene re-mirar PR-C2 no sólo como
+  "texto legible por resultado" sino como **la fuente de las facetas de
+  filtro**.
 
--
+- **B) La usuaria quiere jurisprudencia que no es de la CSJN.** Nombró el
+  Tribunal Superior de Justicia de Córdoba. Esto no está en el plan v2 —ni en
+  la Tanda D, ni en "fuera de v2"— y **cambia qué es Spectre**: hoy el
+  `CLAUDE.md`, el `README` y el `<title>` dicen "colección Fallos de la
+  CSJN". Todo el pipeline lo asume: la unidad es el *tomo*, la cita es
+  `N:N`, `csjn/catalog` + `csjn/download` bajan del sitio de la Corte, el
+  `index_parser` lee el índice de un tomo Fallos. Otra corte = otra unidad,
+  otro formato de cita, otra fuente, quizá sin PDF (una base de búsqueda).
+  Es tier "proyecto", como OCR o documentos privados (§8 del plan).
+
+  **Spike de fuentes (primer barrido, sin verificar a fondo):**
+  - **Poder Judicial de Córdoba** publica compilaciones de jurisprudencia de
+    la **Sala Civil y Comercial del TSJ** en PDF, por año (2015–2024), con
+    datos del caso + sumario + enlace a la resolución completa. Es el
+    análogo más cercano a "Fallos": PDFs anuales curados. Limitación: sólo
+    Sala Civil y Comercial — **no** Penal ni Contencioso-Administrativo, que
+    es justo lo que "derecho administrativo" (pedido #4) necesitaría.
+  - **`jurisprudencia.justiciacordoba.gob.ar`** — base tipo Koha, búsqueda
+    uno por uno, descarga el PDF de cada fallo; sin API ni descarga masiva
+    evidente (bloquea bots).
+  - **SAIJ / `datos.jus.gob.ar`** (Ministerio de Justicia) — agregador
+    nacional, 900k+ documentos, jurisprudencia nacional **y provincial**,
+    actualización diaria, buscador de jurisprudencia provincial. El portal
+    de datos abiertos tiene datasets en CSV/JSON (los visibles son sobre
+    todo *normativa* provincial; falta confirmar si hay dump de
+    jurisprudencia). **Candidato más fuerte** para un corpus
+    multi-jurisdicción ya normalizado — amerita spike propio.
+  - Referencia: proyecto abierto `Probanza-ar/mcp-legal-ar` (conectores a
+    ~15 fuentes jurídicas argentinas) como mapa de qué hay y cómo lo bajan
+    otros.
 
 ### 8.3 Qué le pasa a la Tanda B
 
-La Tanda B estaba planeada sin haber visto a nadie. Con la sesión hecha:
-
-- **Se confirma tal cual**:
-- **Cambia de prioridad** (y hacia dónde):
-- **Se descarta o se recorta**:
-- **Aparece algo nuevo para la Tanda B** que no estaba:
+- **Se confirma tal cual:** nada con evidencia directa. La usuaria no tocó
+  —en su devolución— lectura de fallo, resaltado ni agrupación de
+  resultados. B1/B2/B3 siguen apoyados sólo en el relevamiento del §2.
+- **Cambia de prioridad:** **PR-A2 sube** — era "exponer lo que ya existe";
+  ahora es lo primero y único de lo ya planeado que la usuaria pidió
+  explícitamente. Se le agrega alcance (año como rango).
+- **Se descarta o recorta:** nada todavía. Hace falta la observación en vivo
+  para saber si B1–B3 pegan.
+- **Aparece algo nuevo:** **PR-B4 (Biblioteca con catálogo)** se cruza con el
+  pedido multi-tribunal — si entran otras fuentes, "Biblioteca" deja de ser
+  "tomos de la CSJN" y su diseño tiene que preverlo.
+- **Pendiente fuerte:** la Tanda B **sigue sin validar con usuaria**. Este
+  resumen no reemplaza la sesión de observación en vivo. Conviene correr una
+  con la plantilla (§4/§6) antes de arrancar B1–B3.
 
 ### 8.4 ¿Algo de esto es urgente para la Tanda A?
 
-La Tanda A ya está definida y no depende de esta sesión, pero si algo salió
-acá que reordena A1–A6, anotarlo.
+- **PR-A2:** subir prioridad y ampliar alcance a **rango de años** (no sólo
+  match exacto). Es lo único de la Tanda A que la usuaria tocó.
+- Los pedidos #3–#5 (parte, rama, materia) **no entran en A2 como está
+  escrito** (A2 = exponer filtros que ya existen). Necesitan PR propio o
+  re-scope de PR-C2 — decisión de planificación, no de la Tanda A.
 
--
+### 8.5 Cambios propuestos al plan v2
+
+Para discutir antes de tocar `docs/plan-v2.md`:
+
+1. **PR-A2** — ampliar el criterio: además de exponer `tribunal` / `sección`
+   / `solo léxico`, pasar el filtro de año a **rango**.
+2. **PR-C2** — re-scope explícito: los sumarios oficiales no son sólo texto
+   legible por resultado, son **la fuente de los filtros por materia / rama
+   del derecho** (voces de la Secretaría de Jurisprudencia).
+3. **PR nuevo (Tanda C)** — clasificar el **tipo de parte** (persona /
+   empresa / Estado / organismo) sobre `partes`, y exponerlo como filtro.
+4. **Decisión nueva (¿D-17?)** — *¿Spectre es sólo CSJN o multi-tribunal?*
+   Igual que D-16, se decide antes de planificar los PRs que dependen. Si la
+   respuesta es "sí, multi-tribunal", entra un spike de fuentes (SAIJ vs.
+   PDFs provinciales) como primer paso.
 
 ---
 
-## 9. Registro de la sesión _(completar)_
+## 9. Registro de la sesión
 
-- Fecha:
-- Duración:
-- Quién observó:
-- Cómo se registró (grabación / notas en vivo / dos personas):
-- Base usada (tomos indexados):
+- Fecha: _(completar — Kevin)_
+- Formato: resumen traído por Kevin al chat, no observación con registro en
+  vivo.
+- Quién observó: Kevin.
+- Usuaria: la primera usuaria (la abogada, §0 del plan MVP).
+- Base usada: _(completar)_ — se asume la base real ya indexada (2 tomos).

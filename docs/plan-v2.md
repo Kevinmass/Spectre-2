@@ -89,12 +89,20 @@ Las dos opciones están en la Tanda D. No se empieza esa tanda sin cerrar esto.
 y probado que hay que exponer o corregir. No depende de ninguna decisión
 pendiente: se puede empezar hoy.*
 
-- [ ] **PR-A0 `[N]` Sesión de observación con la primera usuaria**
+- [x] **PR-A0 `[N]` Sesión de observación con la primera usuaria**
   No es código. Sentarse a mirarla buscar cinco cosas que necesite de verdad,
   sin guiarla y sin explicarle la interfaz. Anotar dónde duda, qué escribe en
   el campo, qué esperaba que pasara al hacer clic, y qué preguntó.
   *Entrega:* `docs/qa/observacion-01.md`.
   *Bloquea:* toda la Tanda B.
+  *Cerrado con una salvedad:* la devolución llegó como resumen, no como
+  observación con registro en vivo. Los seis problemas del §2 no se
+  confirmaron ni se descartaron; la Tanda B sigue sin validación de usuaria
+  y conviene una segunda sesión con la plantilla antes de arrancar B1–B3.
+  Lo que sí salió: la usuaria pide filtros por materia / rama del derecho /
+  tipo de parte (datos que hoy no existen) y jurisprudencia de otras cortes
+  (TSJ Córdoba) — ver §8.5 de `observacion-01.md` y las decisiones de
+  planificación que abre.
 
 - [ ] **PR-A1 `[N]` Agrupar los resultados por fallo**
   Un resultado = un caso, con sus pasajes anidados y un contador
