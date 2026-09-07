@@ -70,8 +70,11 @@ si la hay — ninguna de las dos rutas de escritura reintenta sola una etapa
 ya fallida, mismo comportamiento que `spectre ingest` desde PR-19).
 `spectre/web/` (HTML/CSS/JS planos sin build: layout con dos tabs, Buscar y
 Biblioteca, más una vista de fallo sin tab propio —se llega clickeando un
-resultado—; Buscar ya busca de verdad —campo de consulta, resultados
-agrupados por fallo con sus pasajes anidados (PR-A1), cita `Fallos: N:N`,
+resultado, o escribiendo una cita (`348:34`, `Fallos: 348:34`, `Fallos
+348:34`) en el buscador: PR-A5 salta directo al fallo, y si no existe muestra
+un mensaje con la opción de buscarla como texto—; Buscar ya busca de verdad
+—campo de consulta, resultados agrupados por fallo con sus pasajes anidados
+(PR-A1), cita `Fallos: N:N`,
 extracto que arranca en borde de palabra y, si hay una cerca, en el
 principio de la oración que contiene el término (PR-A4), con el término
 resaltado en `<mark>` —PR-A3: sin palabras vacías del castellano y con
@@ -103,7 +106,8 @@ tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
 con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
 **Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo),
 PR-A2 (filtros en la pantalla + año como rango), PR-A3 (resaltado sin ruido),
-PR-A4 (extractos que empiezan en borde de palabra / oración).
+PR-A4 (extractos que empiezan en borde de palabra / oración), PR-A5 (buscar
+por cita).
 Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
 endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
 la ingesta pica 5,3 GB de memoria (PR-C4).
@@ -248,9 +252,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
     resaltado y etiqueta de sección; PR-A1 agrupa los resultados por fallo,
     PR-A2 agrega la fila de filtros (tribunal, sección, rango de años, "solo
-    texto"), PR-A3/A4 limpian el resaltado y los bordes del extracto. Clickear un resultado abre la vista de fallo (PR-22): texto
-    completo por sección, metadatos, citas salientes y el enlace al PDF
-    original en la página exacta del fragmento. La pestaña
+    texto"), PR-A3/A4 limpian el resaltado y los bordes del extracto, y PR-A5
+    hace que escribir una cita en el buscador salte directo al fallo. Clickear
+    un resultado abre la vista de fallo (PR-22): texto completo por sección,
+    metadatos, citas salientes y el enlace al PDF original en la página exacta
+    del fragmento. La pestaña
     Biblioteca (PR-23) lista los tomos con su progreso y tiene los dos
     formularios para lanzar una indexación desde la UI: por `csjn_tomo_id`
     (D-9) o subiendo un PDF a mano — las dos corren el pipeline completo en
@@ -293,10 +299,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   la CSJN, `spectre/corpus/csjn/catalog.py`). Rápidos (segundos), pero CI no
   depende de que el sitio externo esté arriba, así que quedan afuera del
   default igual que `slow`: `pytest -m red`.
-- `tests/verificar_resaltado.mjs` (PR-A3): la única verificación que no es
-  Python. Carga `spectre/web/app.js` con un DOM de mentira y chequea
-  `terminosDe` / `resaltarEn` (palabras vacías + límites de palabra). No la
-  mira `pytest` ni CI; se corre a mano: `node tests/verificar_resaltado.mjs`.
+- `tests/verificar_*.mjs`: las verificaciones que no son Python. Cargan
+  `spectre/web/app.js` con un DOM de mentira (`vm`) y chequean funciones
+  puras: `verificar_resaltado.mjs` (PR-A3, `terminosDe` / `resaltarEn`),
+  `verificar_cita.mjs` (PR-A5, `citaDe` + el mensaje de cita inexistente).
+  No las mira `pytest` ni CI; se corren a mano: `node tests/verificar_cita.mjs`.
 
 ## Git
 

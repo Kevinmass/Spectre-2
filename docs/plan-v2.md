@@ -170,11 +170,19 @@ pendiente: se puede empezar hoy.*
   **0 de 95** extractos de las 8 consultas arrancan a mitad de palabra; 64/95
   arrancan en oración limpia. Detalle en `docs/qa/bitacora-PR-A4.md`.
 
-- [ ] **PR-A5 `[N]` Buscar por cita**
+- [x] **PR-A5 `[N]` Buscar por cita**
   `348:145`, `Fallos: 348:145` y `Fallos 348:145` abren ese fallo directo, sin
   pasar por la lista. Es como se busca jurisprudencia de verdad.
   *Acepta:* las tres formas resuelven al mismo fallo; una cita inexistente da
   un mensaje que dice qué pasó, no un 404 pelado.
+  *Hecho:* `citaDe()` en `spectre/web/app.js` detecta la consulta con forma de
+  cita (regex anclada, `tomo` 1-3 dígitos `:` `página` 1-4, con "Fallos"/":"
+  opcionales) y la normaliza a `tomo:pagina`; el submit del buscador llama
+  `mostrarFallo` en vez de `buscar`. Ante un 404, `mostrarFallo` muestra un
+  mensaje ("no hay ningún fallo con la cita … puede que el tomo no esté
+  cargado…") y un botón para buscarla como texto — no "(404 Not Found)".
+  Verificado con `node tests/verificar_cita.mjs`. Detalle en
+  `docs/qa/bitacora-PR-A5.md`.
 
 - [ ] **PR-A6 `[N]` Set de evaluación de búsqueda**
   20 consultas con el fallo esperado, versionadas en el repo, y un test que
@@ -341,8 +349,8 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0 a PR-A4 cerrados**. Próximo: **PR-A5** (buscar por cita).
-PR-A5 y PR-A6 no dependen de nada pendiente.
+Tanda A: **PR-A0 a PR-A5 cerrados**. Falta **PR-A6** (set de evaluación de
+búsqueda) para cerrar la tanda. No depende de nada pendiente.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
