@@ -83,10 +83,12 @@ function habilitarBuscador(estado) {
   const campo = document.getElementById("campo-consulta");
   const boton = document.querySelector("#form-buscar button");
   const aviso = document.getElementById("buscar-aviso");
+  const filtros = document.querySelectorAll("#filtros input, #filtros select, #filtros button");
 
   if (estado.chunks === 0) {
     campo.disabled = true;
     boton.disabled = true;
+    for (const f of filtros) f.disabled = true;
     aviso.textContent =
       "No hay nada indexado todavía. Corré `spectre ingest <numero>` " +
       "para cargar un tomo.";
@@ -95,6 +97,7 @@ function habilitarBuscador(estado) {
 
   campo.disabled = false;
   boton.disabled = false;
+  for (const f of filtros) f.disabled = false;
   aviso.textContent =
     `Hay ${estado.chunks} fragmentos indexados en ${estado.tomos.length} ` +
     "tomo(s). Escribí algo y buscá.";
@@ -231,6 +234,23 @@ function renderResultado(r, terminos) {
   return li;
 }
 
+// Lee los campos de filtro y arma el query string de /api/buscar. Solo se
+// mandan los que tienen valor: un filtro vacío no restringe nada.
+function parametrosBusqueda(consulta) {
+  const params = new URLSearchParams({ q: consulta });
+  const tribunal = document.getElementById("filtro-tribunal").value.trim();
+  const seccion = document.getElementById("filtro-seccion").value;
+  const anioDesde = document.getElementById("filtro-anio-desde").value;
+  const anioHasta = document.getElementById("filtro-anio-hasta").value;
+  const soloLexico = document.getElementById("filtro-solo-lexico").checked;
+  if (tribunal) params.set("tribunal", tribunal);
+  if (seccion) params.set("seccion", seccion);
+  if (anioDesde) params.set("anio_desde", anioDesde);
+  if (anioHasta) params.set("anio_hasta", anioHasta);
+  if (soloLexico) params.set("solo_lexico", "true");
+  return params;
+}
+
 async function buscar(consulta) {
   const aviso = document.getElementById("buscar-aviso");
   const lista = document.getElementById("resultados");
@@ -238,7 +258,7 @@ async function buscar(consulta) {
   aviso.textContent = "Buscando…";
 
   try {
-    const resp = await fetch(`/api/buscar?q=${encodeURIComponent(consulta)}`);
+    const resp = await fetch(`/api/buscar?${parametrosBusqueda(consulta)}`);
     if (!resp.ok) {
       throw new Error(`${resp.status} ${resp.statusText}`);
     }
@@ -474,12 +494,35 @@ for (const boton of document.querySelectorAll(".tab")) {
   boton.addEventListener("click", () => activarTab(boton.dataset.tab));
 }
 
-document.getElementById("form-buscar").addEventListener("submit", (ev) => {
-  ev.preventDefault();
+// Dispara una búsqueda con la consulta que haya en el campo. Se llama al
+// enviar el formulario y al tocar cualquier filtro: los filtros no viven en
+// una búsqueda, se aplican sobre la que está a la vista (y si no hay ninguna,
+// no pasa nada).
+function ejecutarBusqueda() {
   const consulta = document.getElementById("campo-consulta").value.trim();
   if (consulta) {
     buscar(consulta);
   }
+}
+
+document.getElementById("form-buscar").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  ejecutarBusqueda();
+});
+
+for (const filtro of document.querySelectorAll(
+  "#filtro-tribunal, #filtro-seccion, #filtro-anio-desde, #filtro-anio-hasta, #filtro-solo-lexico",
+)) {
+  filtro.addEventListener("change", ejecutarBusqueda);
+}
+
+document.getElementById("filtros-limpiar").addEventListener("click", () => {
+  document.getElementById("filtro-tribunal").value = "";
+  document.getElementById("filtro-seccion").value = "";
+  document.getElementById("filtro-anio-desde").value = "";
+  document.getElementById("filtro-anio-hasta").value = "";
+  document.getElementById("filtro-solo-lexico").checked = false;
+  ejecutarBusqueda();
 });
 
 document.getElementById("volver-resultados").addEventListener("click", () => {

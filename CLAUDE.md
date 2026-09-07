@@ -66,9 +66,12 @@ si la hay — ninguna de las dos rutas de escritura reintenta sola una etapa
 ya fallida, mismo comportamiento que `spectre ingest` desde PR-19).
 `spectre/web/` (HTML/CSS/JS planos sin build: layout con dos tabs, Buscar y
 Biblioteca, más una vista de fallo sin tab propio —se llega clickeando un
-resultado—; Buscar ya busca de verdad —campo de consulta, resultados con
-cita `Fallos: N:N`, extracto con el término resaltado en `<mark>`, etiqueta
-de sección mayoría/voto/disidencia/dictamen—, la vista de fallo muestra el
+resultado—; Buscar ya busca de verdad —campo de consulta, resultados
+agrupados por fallo con sus pasajes anidados (PR-A1), cita `Fallos: N:N`,
+extracto con el término resaltado en `<mark>`, etiqueta de sección
+mayoría/voto/disidencia/dictamen, y una fila de filtros (PR-A2): tribunal,
+sección, rango de años y "solo texto", que se aplican sobre la búsqueda a la
+vista—, la vista de fallo muestra el
 texto completo por sección, metadatos, citas salientes y el enlace al PDF en
 la página exacta del fragmento que trajo el resultado, y Biblioteca (PR-23)
 lista los tomos con su progreso (sondeado cada 2s mientras la pestaña está a
@@ -91,7 +94,8 @@ fallos, no tocar el código. Con esto el plan (`docs/plan-spectre.md`, §6/§9)
 quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
 tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
 con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
-**Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo).
+**Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo),
+PR-A2 (filtros en la pantalla + año como rango).
 Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
 endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
 la ingesta pica 5,3 GB de memoria (PR-C4).
@@ -211,11 +215,13 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     por modelo, cuántos chunks de SQLite faltan indexar (PR-13) y cuántos hay
     en el índice léxico FTS5 (PR-14). `spectre index buscar "<consulta>"
     [--k N]` — corre la consulta contra `chunks_fts` solo (léxico puro).
-  - `spectre search buscar "<consulta>" [--k N] [--candidatos N] [--anio N]
-    [--tribunal T] [--seccion mayoria|voto|disidencia|dictamen]
-    [--solo-lexico]` — fusiona léxico + vectorial por RRF (PR-15); embebe la
-    consulta con el modelo real salvo que se pase `--solo-lexico` (no necesita
-    `[embed]` en ese caso).
+  - `spectre search buscar "<consulta>" [--k N] [--candidatos N]
+    [--anio-desde AAAA] [--anio-hasta AAAA] [--tribunal T]
+    [--seccion mayoria|voto|disidencia|dictamen] [--solo-lexico]` — fusiona
+    léxico + vectorial por RRF (PR-15); embebe la consulta con el modelo real
+    salvo que se pase `--solo-lexico` (no necesita `[embed]` en ese caso). El
+    año es un rango inclusivo (PR-A2); se pueden pasar los dos límites o uno
+    solo.
   - `spectre ingest <numero> [--pdf RUTA] [--csjn-tomo-id ID]` — corre el
     pipeline completo sobre un tomo (descargar → extraer → limpiar →
     segmentar → estructurar → fragmentar → embeber → indexar) y persiste todo
@@ -232,9 +238,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
     navegador (PR-20). La pestaña Buscar ya busca de verdad (PR-21):
     `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
-    resaltado y etiqueta de sección. Clickear un resultado abre la vista de
-    fallo (PR-22): texto completo por sección, metadatos, citas salientes y
-    el enlace al PDF original en la página exacta del fragmento. La pestaña
+    resaltado y etiqueta de sección; PR-A1 agrupa los resultados por fallo y
+    PR-A2 agrega la fila de filtros (tribunal, sección, rango de años, "solo
+    texto"). Clickear un resultado abre la vista de fallo (PR-22): texto
+    completo por sección, metadatos, citas salientes y el enlace al PDF
+    original en la página exacta del fragmento. La pestaña
     Biblioteca (PR-23) lista los tomos con su progreso y tiene los dos
     formularios para lanzar una indexación desde la UI: por `csjn_tomo_id`
     (D-9) o subiendo un PDF a mano — las dos corren el pipeline completo en

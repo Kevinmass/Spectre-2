@@ -20,7 +20,10 @@ lectura:
   va **agrupada por fallo**: cada resultado es un fallo con sus `pasajes`
   anidados (uno por tipo de sección) y `total_pasajes` para el contador
   "N pasajes más" — antes eran chunks sueltos y una misma sentencia tapaba a
-  las demás (relevamiento del plan v2, §2.1).
+  las demás (relevamiento del plan v2, §2.1). PR-A2 expone en la UI los
+  filtros que el backend ya aceptaba (`tribunal`, `seccion`, `solo_lexico`) y
+  pasa el de año a rango (`anio_desde` / `anio_hasta`, inclusivos, sueltos o
+  combinados).
 - `/api/fallos/{cita}` (PR-22): el fallo completo por secciones + metadatos +
   citas salientes. Las citas se recalculan sobre el texto ya persistido
   (`extraer_citas`, PR-10) porque el pipeline (PR-19) decidió a propósito no
@@ -201,7 +204,8 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         q: str = Query(..., min_length=1, description="texto a buscar"),
         k: int = Query(10, ge=1, le=50),
         candidatos: int = Query(50, ge=1, le=200),
-        anio: int | None = None,
+        anio_desde: int | None = Query(None, ge=1800, le=2200),
+        anio_hasta: int | None = Query(None, ge=1800, le=2200),
         tribunal: str | None = None,
         seccion: Literal["mayoria", "voto", "disidencia", "dictamen"] | None = None,
         solo_lexico: bool = False,
@@ -209,6 +213,7 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         consulta = q.strip()
         if not consulta:
             raise HTTPException(422, "la consulta no puede estar vacía")
+        tribunal = tribunal.strip() if tribunal and tribunal.strip() else None
 
         s = get_settings()
         if not s.db_path.exists():
@@ -240,7 +245,8 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 vector,
                 k=candidatos,
                 candidatos=candidatos,
-                anio=anio,
+                anio_desde=anio_desde,
+                anio_hasta=anio_hasta,
                 tribunal_origen=tribunal,
                 tipo_seccion=seccion,
             )

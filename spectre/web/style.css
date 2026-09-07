@@ -135,6 +135,69 @@ th {
   cursor: pointer;
 }
 
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+}
+
+.filtros label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--texto-tenue);
+}
+
+.filtros input,
+.filtros select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: 5px;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.filtros input[type="number"] {
+  width: 6rem;
+}
+
+.filtros .filtro-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.filtros .filtro-check input {
+  padding: 0;
+}
+
+.filtros-limpiar {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--borde);
+  border-radius: 5px;
+  background: none;
+  color: var(--texto-tenue);
+  cursor: pointer;
+}
+
+.filtros input:disabled,
+.filtros select:disabled,
+.filtros button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .resultados {
   list-style: none;
   margin: 1rem 0 0;

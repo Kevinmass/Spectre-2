@@ -600,14 +600,41 @@ def test_filtrar_chunks_lista_vacia(repo):
     assert repo.filtrar_chunks([]) == set()
 
 
-def test_filtrar_chunks_por_anio(repo):
-    a = _fallo_con_metadatos(
+def test_filtrar_chunks_por_rango_de_anios(repo):
+    v2018 = _fallo_con_metadatos(
+        repo, fecha="2018-06-01", tribunal_origen=None, secciones=["mayoria"]
+    )
+    v2020 = _fallo_con_metadatos(
         repo, fecha="2020-06-01", tribunal_origen=None, secciones=["mayoria"]
     )
-    b = _fallo_con_metadatos(
-        repo, fecha="2021-06-01", tribunal_origen=None, secciones=["mayoria"]
+    v2022 = _fallo_con_metadatos(
+        repo, fecha="2022-06-01", tribunal_origen=None, secciones=["mayoria"]
     )
-    assert repo.filtrar_chunks(a + b, anio=2020) == set(a)
+    todos = v2018 + v2020 + v2022
+
+    # un solo año: desde == hasta
+    assert repo.filtrar_chunks(todos, anio_desde=2020, anio_hasta=2020) == set(v2020)
+    # rango cerrado, inclusivo en las dos puntas
+    assert repo.filtrar_chunks(todos, anio_desde=2018, anio_hasta=2020) == set(
+        v2018 + v2020
+    )
+    # solo piso
+    assert repo.filtrar_chunks(todos, anio_desde=2020) == set(v2020 + v2022)
+    # solo techo
+    assert repo.filtrar_chunks(todos, anio_hasta=2020) == set(v2018 + v2020)
+
+
+def test_filtrar_chunks_por_anio_ignora_fallos_sin_fecha(repo):
+    con_fecha = _fallo_con_metadatos(
+        repo, fecha="2020-06-01", tribunal_origen=None, secciones=["mayoria"]
+    )
+    sin_fecha = _fallo_con_metadatos(
+        repo, fecha=None, tribunal_origen=None, secciones=["mayoria"]
+    )
+    obtenido = repo.filtrar_chunks(
+        con_fecha + sin_fecha, anio_desde=2019, anio_hasta=2021
+    )
+    assert obtenido == set(con_fecha)
 
 
 def test_filtrar_chunks_por_tribunal(repo):
@@ -642,7 +669,11 @@ def test_filtrar_chunks_combina_filtros(repo):
     )
     esperado = {a[1]}
     obtenido = repo.filtrar_chunks(
-        a + b, anio=2020, tribunal_origen="Cámara X", tipo_seccion="voto"
+        a + b,
+        anio_desde=2020,
+        anio_hasta=2020,
+        tribunal_origen="Cámara X",
+        tipo_seccion="voto",
     )
     assert obtenido == esperado
 
