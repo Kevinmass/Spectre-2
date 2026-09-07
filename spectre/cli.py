@@ -753,6 +753,8 @@ def _cmd_search_buscar(args: argparse.Namespace) -> int:
             anio_hasta=args.anio_hasta,
             tribunal_origen=args.tribunal,
             tipo_seccion=args.seccion,
+            voz=args.voz,
+            materia=args.materia,
         )
         print(f"consulta: {args.consulta!r}  ({len(resultados)} resultados)\n")
         for r in resultados:
@@ -841,6 +843,64 @@ def _cmd_csjn_sumario(args: argparse.Namespace) -> int:
             print(f"  fecha:    {s.fecha}")
         print(f"  voces:    {' · '.join(s.voces) if s.voces else '(sin voces)'}")
         print(f"  texto:    {s.texto}")
+    return 0
+
+
+def _cmd_sumarios_sync(args: argparse.Namespace) -> int:
+    from spectre.db import Repo
+    from spectre.sumarios import sincronizar_tomo
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    try:
+        migrate(conn)
+        if Repo(conn).get_tomo_por_numero(args.numero) is None:
+            raise SystemExit(
+                f"no existe el tomo {args.numero} en la base "
+                "(indexalo primero con `spectre ingest`)"
+            )
+        resumen = sincronizar_tomo(
+            conn,
+            args.numero,
+            pausa=args.pausa,
+            log=(print if args.verbose else None),
+        )
+    finally:
+        conn.close()
+
+    filas = [
+        ("tomo", resumen.tomo),
+        ("fallos consultados", resumen.fallos_consultados),
+        ("fallos con sumario", resumen.fallos_con_sumario),
+        ("sumarios totales", resumen.sumarios_totales),
+        ("voces distintas", resumen.voces_distintas),
+    ]
+    ancho = max(len(k) for k, _ in filas)
+    for k, v in filas:
+        print(f"{k.ljust(ancho)}  {v}")
+    return 0
+
+
+def _cmd_sumarios_status(args: argparse.Namespace) -> int:
+    from spectre.db import Repo
+
+    s = get_settings()
+    if not s.db_path.exists():
+        print("la base todavía no existe (corré `spectre db migrate`)")
+        return 0
+    conn = connect(s.db_path)
+    try:
+        repo = Repo(conn)
+        tomos = repo.list_tomos()
+        total_sumarios = conn.execute("SELECT count(*) FROM sumarios").fetchone()[0]
+        total_voces = conn.execute("SELECT count(*) FROM voces").fetchone()[0]
+        print(f"sumarios: {total_sumarios}  ·  voces distintas: {total_voces}")
+        for t in tomos:
+            n = repo.contar_sumarios_de_tomo(t.id)
+            print(f"  tomo {t.numero}: {n} sumario(s)")
+    finally:
+        conn.close()
     return 0
 
 
@@ -982,6 +1042,36 @@ def build_parser() -> argparse.ArgumentParser:
         "pagina", type=int, help="página de inicio del fallo (la de la cita N:N)"
     )
     p_csjn_sumario.set_defaults(func=_cmd_csjn_sumario)
+
+    p_sumarios = sub.add_parser(
+        "sumarios",
+        help="Sumarios oficiales de la CSJN: sincronizarlos al corpus y ver estado",
+    )
+    sumarios_sub = p_sumarios.add_subparsers(
+        dest="sumarios_command", required=True, metavar="<acción>"
+    )
+    p_sumarios_sync = sumarios_sub.add_parser(
+        "sync",
+        help="Baja y persiste los sumarios de todos los fallos de un tomo (PR-C2b)",
+    )
+    p_sumarios_sync.add_argument("numero", type=int, help="número de tomo ya indexado")
+    p_sumarios_sync.add_argument(
+        "--pausa",
+        type=float,
+        default=0.5,
+        metavar="SEG",
+        help="segundos de espera entre fallos (default 0.5)",
+    )
+    p_sumarios_sync.add_argument(
+        "--verbose",
+        action="store_true",
+        help="imprime una línea por fallo a medida que avanza",
+    )
+    p_sumarios_sync.set_defaults(func=_cmd_sumarios_sync)
+    p_sumarios_status = sumarios_sub.add_parser(
+        "status", help="Cuántos sumarios / voces hay cargados, por tomo"
+    )
+    p_sumarios_status.set_defaults(func=_cmd_sumarios_status)
 
     p_pdf = sub.add_parser("pdf", help="Lectura de PDFs de tomos")
     pdf_sub = p_pdf.add_subparsers(
@@ -1159,6 +1249,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--seccion",
         choices=["mayoria", "voto", "disidencia", "dictamen"],
         help="filtra por tipo de sección",
+    )
+    p_search_buscar.add_argument(
+        "--voz", help="filtra por una voz del tesauro de la CSJN (PR-C2b)"
+    )
+    p_search_buscar.add_argument(
+        "--materia", help="filtra por materia de la Secretaría (PR-C2b)"
     )
     p_search_buscar.add_argument(
         "--solo-lexico",

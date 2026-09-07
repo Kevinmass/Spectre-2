@@ -104,6 +104,11 @@ function pintarBiblioteca(estado) {
     const tdProgreso = document.createElement("td");
     tdProgreso.appendChild(renderProgresoTomo(tomo));
     tr.appendChild(tdProgreso);
+
+    const tdSumarios = document.createElement("td");
+    tdSumarios.textContent = tomo.sumarios ?? 0;
+    tr.appendChild(tdSumarios);
+
     filas.appendChild(tr);
   }
 }
@@ -142,6 +147,7 @@ async function cargarEstado() {
     const estado = await resp.json();
     habilitarBuscador(estado);
     pintarBiblioteca(estado);
+    cargarMaterias(); // no-op una vez que hay materias; se puebla tras un sync
   } catch (err) {
     aviso.textContent = `No se pudo consultar el estado del servidor (${err.message}).`;
   }
@@ -213,6 +219,63 @@ function renderPasaje(p, terminos) {
   return div;
 }
 
+// Sumarios oficiales de la CSJN (PR-C2b). `compacto` (en la lista de
+// resultados) muestra solo el primero + un contador; la vista de fallo los
+// muestra todos.
+function renderSumarios(sumarios, { compacto = false } = {}) {
+  const contenedor = document.createElement("div");
+  contenedor.className = "sumarios";
+  if (!sumarios || sumarios.length === 0) {
+    return contenedor;
+  }
+
+  const h = document.createElement(compacto ? "p" : "h3");
+  h.className = "sumarios-titulo";
+  h.textContent = "Sumario oficial de la CSJN";
+  contenedor.appendChild(h);
+
+  const mostrados = compacto ? sumarios.slice(0, 1) : sumarios;
+  for (const s of mostrados) {
+    const div = document.createElement("div");
+    div.className = "sumario";
+
+    const texto = document.createElement("p");
+    texto.className = "sumario-texto";
+    texto.textContent = s.texto;
+    div.appendChild(texto);
+
+    if (s.materia) {
+      const materia = document.createElement("p");
+      materia.className = "sumario-materia";
+      materia.textContent = s.materia;
+      div.appendChild(materia);
+    }
+
+    if (s.voces && s.voces.length > 0) {
+      const voces = document.createElement("p");
+      voces.className = "sumario-voces";
+      for (const v of s.voces) {
+        const chip = document.createElement("span");
+        chip.className = "voz-chip";
+        chip.textContent = v;
+        voces.appendChild(chip);
+      }
+      div.appendChild(voces);
+    }
+    contenedor.appendChild(div);
+  }
+
+  const ocultos = sumarios.length - mostrados.length;
+  if (ocultos > 0) {
+    const mas = document.createElement("p");
+    mas.className = "sumarios-mas";
+    mas.textContent =
+      ocultos === 1 ? "1 sumario más" : `${ocultos} sumarios más`;
+    contenedor.appendChild(mas);
+  }
+  return contenedor;
+}
+
 function renderResultado(r, terminos) {
   const li = document.createElement("li");
   li.className = "resultado";
@@ -251,6 +314,10 @@ function renderResultado(r, terminos) {
     li.appendChild(caratula);
   }
 
+  if (r.sumarios && r.sumarios.length > 0) {
+    li.appendChild(renderSumarios(r.sumarios, { compacto: true }));
+  }
+
   const pasajes = document.createElement("div");
   pasajes.className = "pasajes";
   for (const p of r.pasajes) {
@@ -280,11 +347,15 @@ function parametrosBusqueda(consulta) {
   const seccion = document.getElementById("filtro-seccion").value;
   const anioDesde = document.getElementById("filtro-anio-desde").value;
   const anioHasta = document.getElementById("filtro-anio-hasta").value;
+  const voz = document.getElementById("filtro-voz").value.trim();
+  const materia = document.getElementById("filtro-materia").value;
   const soloLexico = document.getElementById("filtro-solo-lexico").checked;
   if (tribunal) params.set("tribunal", tribunal);
   if (seccion) params.set("seccion", seccion);
   if (anioDesde) params.set("anio_desde", anioDesde);
   if (anioHasta) params.set("anio_hasta", anioHasta);
+  if (voz) params.set("voz", voz);
+  if (materia) params.set("materia", materia);
   if (soloLexico) params.set("solo_lexico", "true");
   return params;
 }
@@ -498,6 +569,10 @@ function renderFallo(fallo, paginaSolicitada) {
   contenedor.appendChild(renderMetadatos(fallo));
   contenedor.appendChild(renderEnlacePdf(fallo, paginaSolicitada));
 
+  if (fallo.sumarios && fallo.sumarios.length > 0) {
+    contenedor.appendChild(renderSumarios(fallo.sumarios));
+  }
+
   const secciones = document.createElement("div");
   secciones.className = "secciones-fallo";
   for (const sec of fallo.secciones) {
@@ -608,6 +683,80 @@ async function subirPdf(numero, archivo, boton) {
   }
 }
 
+async function sincronizarSumarios(numero, boton) {
+  const aviso = document.getElementById("biblioteca-aviso");
+  aviso.hidden = false;
+  aviso.textContent = `Sincronizando sumarios del tomo ${numero}…`;
+  boton.disabled = true;
+  try {
+    const resp = await fetch(`/api/tomos/${numero}/sumarios/sync`, {
+      method: "POST",
+    });
+    if (!resp.ok) {
+      throw new Error(await _detalleDeError(resp));
+    }
+    aviso.textContent =
+      `Tomo ${numero}: sincronización de sumarios iniciada. Va a tardar ` +
+      "(una consulta por fallo); el conteo de la columna «Sumarios» sube solo.";
+    cargarEstado();
+  } catch (err) {
+    aviso.textContent = `No se pudieron sincronizar los sumarios (${err.message}).`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+// --- filtro por voz: autocompletado contra /api/voces (tabla local) ------ //
+
+let _debounceVoces = null;
+
+async function actualizarDatalistVoces(termino) {
+  if (!termino || termino.length < 2) {
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/voces?q=${encodeURIComponent(termino)}`);
+    if (!resp.ok) {
+      return;
+    }
+    const datos = await resp.json();
+    const datalist = document.getElementById("voces-datalist");
+    datalist.textContent = "";
+    for (const v of datos.voces) {
+      const opt = document.createElement("option");
+      opt.value = v.valor;
+      datalist.appendChild(opt);
+    }
+  } catch {
+    // el autocompletado es una ayuda, no un bloqueante: si falla, se sigue
+  }
+}
+
+let _materiasCargadas = false;
+
+async function cargarMaterias() {
+  if (_materiasCargadas) {
+    return;
+  }
+  try {
+    const resp = await fetch("/api/materias");
+    if (!resp.ok) {
+      return;
+    }
+    const datos = await resp.json();
+    const select = document.getElementById("filtro-materia");
+    for (const m of datos.materias) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      select.appendChild(opt);
+    }
+    _materiasCargadas = datos.materias.length > 0;
+  } catch {
+    // idem: sin materias el <select> queda con "todas" nomás
+  }
+}
+
 for (const boton of document.querySelectorAll(".tab")) {
   boton.addEventListener("click", () => activarTab(boton.dataset.tab));
 }
@@ -646,16 +795,24 @@ document.getElementById("form-buscar").addEventListener("submit", (ev) => {
 });
 
 for (const filtro of document.querySelectorAll(
-  "#filtro-tribunal, #filtro-seccion, #filtro-anio-desde, #filtro-anio-hasta, #filtro-solo-lexico",
+  "#filtro-tribunal, #filtro-seccion, #filtro-anio-desde, #filtro-anio-hasta, #filtro-voz, #filtro-materia, #filtro-solo-lexico",
 )) {
   filtro.addEventListener("change", ejecutarBusqueda);
 }
+
+document.getElementById("filtro-voz").addEventListener("input", (ev) => {
+  clearTimeout(_debounceVoces);
+  const termino = ev.target.value.trim();
+  _debounceVoces = setTimeout(() => actualizarDatalistVoces(termino), 200);
+});
 
 document.getElementById("filtros-limpiar").addEventListener("click", () => {
   document.getElementById("filtro-tribunal").value = "";
   document.getElementById("filtro-seccion").value = "";
   document.getElementById("filtro-anio-desde").value = "";
   document.getElementById("filtro-anio-hasta").value = "";
+  document.getElementById("filtro-voz").value = "";
+  document.getElementById("filtro-materia").value = "";
   document.getElementById("filtro-solo-lexico").checked = false;
   ejecutarBusqueda();
 });
@@ -689,6 +846,16 @@ document.getElementById("form-subir-pdf").addEventListener("submit", (ev) => {
     return;
   }
   subirPdf(numero, archivo, form.querySelector("button"));
+});
+
+document.getElementById("form-sync-sumarios").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const numero = form.elements.numero.value;
+  if (!numero) {
+    return;
+  }
+  sincronizarSumarios(numero, form.querySelector("button"));
 });
 
 cargarEstado();

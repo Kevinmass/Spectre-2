@@ -73,7 +73,9 @@ class Sumario:
     `paginarSumarios`. `voces` es la tupla de descriptores del tesauro (en el
     orden que los da la Corte); `texto` es el sumario con las etiquetas HTML
     ya sacadas. `fecha` se normaliza a ISO (`AAAA-MM-DD`) o queda en `None` si
-    no venía como `dd/mm/yyyy`."""
+    no venía como `dd/mm/yyyy`. `materia` es
+    `analisisDocumental.materiaSecretaria` — la rama del derecho con la que la
+    Secretaría clasifica el sumario, o `None` si no vino (PR-C2b)."""
 
     tomo: int
     pagina: int
@@ -82,6 +84,7 @@ class Sumario:
     voces: tuple[str, ...]
     texto: str
     id_documento: str | None
+    materia: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -120,6 +123,20 @@ def _id_documento(link: object) -> str | None:
     return m.group(1) if m else None
 
 
+def _materia(analisis: object) -> str | None:
+    """`analisisDocumental.materiaSecretaria` — la rama del derecho. Viene como
+    string suelto o, a veces, como objeto `{descripcion: ...}`; se acepta
+    cualquiera de las dos y se ignora lo demás."""
+    if not isinstance(analisis, dict):
+        return None
+    valor = analisis.get("materiaSecretaria")
+    if isinstance(valor, dict):
+        valor = valor.get("descripcion") or valor.get("valor")
+    if isinstance(valor, str) and valor.strip():
+        return valor.strip()
+    return None
+
+
 def _total_resultados(html_contenedor: str) -> int | None:
     """El `var totalResultados = "N"` del HTML que devuelve `buscar.html`.
     `None` si no está (respuesta inesperada)."""
@@ -139,6 +156,7 @@ def _map_sumario(obj: dict, *, tomo: int, pagina: int) -> Sumario:
         voces=_voces(obj.get("voces")),
         texto=_texto_plano(obj.get("texto")),
         id_documento=_id_documento(obj.get("linkDocumento")),
+        materia=_materia(obj.get("analisisDocumental")),
     )
 
 
@@ -168,6 +186,12 @@ class TransporteHTTP:
         return cuerpo
 
     def abrir_sesion(self) -> None:
+        """Abre la sesión (GET inicial que setea las cookies). Idempotente:
+        si ya está abierta no vuelve a pegarle al sitio — así reusar un mismo
+        transporte para varios fallos (el sync de PR-C2b) no hace un GET de más
+        por fallo."""
+        if self._sesion_abierta:
+            return
         req = urllib.request.Request(_URL_CONSULTA, headers=_HEADERS)
         self._abrir(req)
         self._sesion_abierta = True

@@ -320,6 +320,60 @@ button.cita:disabled {
   color: var(--texto-tenue);
 }
 
+/* Sumarios oficiales de la CSJN (PR-C2b) */
+.sumarios {
+  margin-top: 0.6rem;
+}
+
+.sumarios-titulo {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-tenue);
+}
+
+.sumario {
+  border-left: 3px solid var(--acento);
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  margin: 0.4rem 0;
+}
+
+.sumario-texto {
+  margin: 0;
+}
+
+.sumario-materia {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--texto-tenue);
+}
+
+.sumario-voces {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.voz-chip {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--fondo);
+  color: var(--texto-tenue);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sumarios-mas {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--texto-tenue);
+}
+
 .volver {
   font: inherit;
   font-size: 0.9rem;

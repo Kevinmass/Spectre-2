@@ -45,6 +45,23 @@
           </select>
         </label>
         <label>
+          Voz (sumario oficial)
+          <input
+            type="text"
+            id="filtro-voz"
+            autocomplete="off"
+            list="voces-datalist"
+            placeholder="p. ej. contrato administrativo"
+          />
+          <datalist id="voces-datalist"></datalist>
+        </label>
+        <label>
+          Materia
+          <select id="filtro-materia">
+            <option value="">todas</option>
+          </select>
+        </label>
+        <label>
           Año desde
           <input type="number" id="filtro-anio-desde" min="1863" max="2100" step="1" />
         </label>
@@ -67,7 +84,7 @@
       <p id="biblioteca-vacio" class="vacio" hidden>Todavía no cargaste ningún tomo.</p>
       <table id="biblioteca-tabla" hidden>
         <thead>
-          <tr><th>Tomo</th><th>Estado</th><th>Calidad</th><th>Progreso</th></tr>
+          <tr><th>Tomo</th><th>Estado</th><th>Calidad</th><th>Progreso</th><th>Sumarios</th></tr>
         </thead>
         <tbody id="biblioteca-filas"></tbody>
       </table>
@@ -106,6 +123,20 @@
             <input type="file" name="archivo" accept="application/pdf" required />
           </label>
           <button type="submit">Subir e indexar</button>
+        </form>
+
+        <form id="form-sync-sumarios" class="form-tomo">
+          <h3>Sincronizar sumarios de la CSJN</h3>
+          <label>
+            Número de tomo
+            <input type="number" name="numero" min="1" required />
+          </label>
+          <p class="ayuda-form">
+            Baja los sumarios oficiales de la Secretaría de Jurisprudencia para
+            los fallos de ese tomo (ya indexado). Tarda: es una consulta por
+            fallo. El avance se ve en la columna «Sumarios».
+          </p>
+          <button type="submit">Sincronizar sumarios</button>
         </form>
       </div>
       <p id="biblioteca-aviso" class="vacio" hidden></p>

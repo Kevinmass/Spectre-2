@@ -18,6 +18,7 @@ from spectre.corpus.csjn.sumarios import (
     _id_documento,
     _map_sumario,
     _map_voces,
+    _materia,
     _texto_plano,
     _total_resultados,
     _voces,
@@ -106,6 +107,29 @@ def test_map_sumario_usa_el_respaldo_de_tomo_pagina_si_falta():
     assert (s.tomo, s.pagina) == (349, 1)
     assert s.voces == ()
     assert s.fecha is None
+    assert s.materia is None
+
+
+def test_materia_lee_materia_secretaria_string_o_objeto():
+    assert _materia({"materiaSecretaria": "DERECHO ADMINISTRATIVO"}) == (
+        "DERECHO ADMINISTRATIVO"
+    )
+    assert _materia({"materiaSecretaria": {"descripcion": "DERECHO PENAL"}}) == (
+        "DERECHO PENAL"
+    )
+    assert _materia({"materiaSecretaria": "  "}) is None
+    assert _materia({}) is None
+    assert _materia(None) is None
+
+
+def test_map_sumario_toma_la_materia_del_analisis_documental():
+    obj = {
+        "tomo": 348,
+        "pagina": 34,
+        "texto": "sumario",
+        "analisisDocumental": {"materiaSecretaria": "DERECHO ADMINISTRATIVO"},
+    }
+    assert _map_sumario(obj, tomo=348, pagina=34).materia == "DERECHO ADMINISTRATIVO"
 
 
 def test_map_voces_descarta_lo_incompleto():

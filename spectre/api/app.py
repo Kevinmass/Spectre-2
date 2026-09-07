@@ -78,6 +78,7 @@ from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
 from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
 from spectre.search import PALABRAS_VACIAS, agrupar_por_fallo, buscar_hibrido
+from spectre.sumarios import sincronizar_tomo
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -111,6 +112,7 @@ def _tomo_a_dict(conn: sqlite3.Connection, tomo: Tomo) -> dict:
         "etapas_hechas": hechas,
         "etapas_total": total,
         "error": _error_de_etapa_fallida(conn, tomo),
+        "sumarios": Repo(conn).contar_sumarios_de_tomo(tomo.id),
     }
 
 
@@ -121,6 +123,17 @@ def _correr_pipeline_en_fondo(db_path: Path, tomo_id: int) -> None:
     conn = connect(db_path)
     try:
         correr_pipeline(conn, [tomo_id])
+    finally:
+        conn.close()
+
+
+def _sincronizar_sumarios_en_fondo(db_path: Path, numero: int) -> None:
+    """Lo que corre `BackgroundTasks` para `POST /api/tomos/{n}/sumarios/sync`:
+    conexión propia y el mismo `sincronizar_tomo` que usa `spectre sumarios
+    sync`. Puede tardar (un fallo por request contra la CSJN, con pausa)."""
+    conn = connect(db_path)
+    try:
+        sincronizar_tomo(conn, numero)
     finally:
         conn.close()
 
@@ -265,12 +278,16 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
         anio_hasta: int | None = Query(None, ge=1800, le=2200),
         tribunal: str | None = None,
         seccion: Literal["mayoria", "voto", "disidencia", "dictamen"] | None = None,
+        voz: str | None = None,
+        materia: str | None = None,
         solo_lexico: bool = False,
     ) -> dict:
         consulta = q.strip()
         if not consulta:
             raise HTTPException(422, "la consulta no puede estar vacía")
         tribunal = tribunal.strip() if tribunal and tribunal.strip() else None
+        voz = voz.strip() if voz and voz.strip() else None
+        materia = materia.strip() if materia and materia.strip() else None
 
         s = get_settings()
         if not s.db_path.exists():
@@ -306,10 +323,15 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 anio_hasta=anio_hasta,
                 tribunal_origen=tribunal,
                 tipo_seccion=seccion,
+                voz=voz,
+                materia=materia,
             )
             agrupados = agrupar_por_fallo(conn, fusionados, limite=k)
 
             terminos = _terminos(consulta)
+            sumarios_por_fallo = Repo(conn).sumarios_por_fallos(
+                [g.fallo_id for g in agrupados]
+            )
             resultados = [
                 {
                     "cita": g.cita,
@@ -318,6 +340,10 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                     "tribunal_origen": g.tribunal_origen,
                     "score": g.score,
                     "total_pasajes": g.total_pasajes,
+                    "sumarios": [
+                        {"texto": s.texto, "voces": list(s.voces), "materia": s.materia}
+                        for s in sumarios_por_fallo.get(g.fallo_id, [])
+                    ],
                     "pasajes": [
                         {
                             "seccion_tipo": p.seccion_tipo,
@@ -332,6 +358,37 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 for g in agrupados
             ]
             return {"consulta": consulta, "modo": modo, "resultados": resultados}
+        finally:
+            conn.close()
+
+    @app.get("/api/voces")
+    def voces(
+        q: str = Query(..., min_length=1, description="prefijo/substring"),
+    ) -> dict:
+        """Autocompletado del filtro por voz: las voces del corpus (tabla
+        `voces`, poblada por el sync de sumarios) que contienen `q`. No pega
+        contra el tesauro vivo de la CSJN — solo tiene sentido ofrecer voces
+        que algún fallo indexado trae."""
+        s = get_settings()
+        if not s.db_path.exists():
+            return {"voces": []}
+        conn = connect(s.db_path)
+        try:
+            pares = Repo(conn).buscar_voces_locales(q.strip())
+        finally:
+            conn.close()
+        return {"voces": [{"valor": v, "codigo": c} for v, c in pares]}
+
+    @app.get("/api/materias")
+    def materias() -> dict:
+        """Las materias de la Secretaría presentes en el corpus, para el
+        `<select>` del filtro por materia."""
+        s = get_settings()
+        if not s.db_path.exists():
+            return {"materias": []}
+        conn = connect(s.db_path)
+        try:
+            return {"materias": Repo(conn).materias_del_corpus()}
         finally:
             conn.close()
 
@@ -358,6 +415,7 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
             if not citas:
                 citas = extraer_citas(texto_completo)
             entrantes = repo.citas_entrantes(fallo.id)
+            sumarios = repo.list_sumarios_de_fallo(fallo.id)
             pdf_path = Path(tomo.pdf_path) if tomo and tomo.pdf_path else None
 
             return {
@@ -372,6 +430,15 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
                 "pagina_fin": fallo.pagina_fin,
                 "offset_pagina": tomo.offset_pagina if tomo else None,
                 "pdf_disponible": bool(pdf_path and pdf_path.is_file()),
+                "sumarios": [
+                    {
+                        "texto": s.texto,
+                        "voces": list(s.voces),
+                        "materia": s.materia,
+                        "id_documento": s.id_documento,
+                    }
+                    for s in sumarios
+                ],
                 "secciones": [
                     {
                         "tipo": sec.tipo,
@@ -490,6 +557,27 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
 
         background_tasks.add_task(_correr_pipeline_en_fondo, s.db_path, tomo_id)
         return cuerpo
+
+    @app.post("/api/tomos/{numero}/sumarios/sync", status_code=202)
+    def sync_sumarios(numero: int, background_tasks: BackgroundTasks) -> dict:
+        """Trae los sumarios oficiales de la CSJN para los fallos de este tomo y
+        los persiste (PR-C2b), **en segundo plano** — es un request por fallo
+        contra la Secretaría, con pausa, así que puede tardar. El avance se ve
+        en `/api/estado` (`sumarios` por tomo). Reejecutable: reemplaza, no
+        acumula."""
+        s = get_settings()
+        if not s.db_path.exists():
+            raise HTTPException(404, f"no existe el tomo {numero}")
+        conn = connect(s.db_path)
+        try:
+            tomo = Repo(conn).get_tomo_por_numero(numero)
+        finally:
+            conn.close()
+        if tomo is None:
+            raise HTTPException(404, f"no existe el tomo {numero}")
+
+        background_tasks.add_task(_sincronizar_sumarios_en_fondo, s.db_path, numero)
+        return {"numero": numero, "sumarios_sync": "iniciada"}
 
     # Al final: StaticFiles(html=True) sirve index.html en "/" y es un
     # catch-all, así que las rutas de la API tienen que quedar registradas

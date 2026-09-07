@@ -279,7 +279,7 @@ pendiente: se puede empezar hoy.*
   (`tomo348_cuerpo_p31-40.pdf`, en la suite rápida) el pipeline persiste 8
   citas y el test lo fija. Detalle en `docs/qa/bitacora-PR-C1.md`.
 
-- **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
+- [x] **PR-C2 `[N]` Sumarios oficiales de la CSJN — y las voces como filtro**
   La Secretaría de Jurisprudencia publica sumarios consultables por tomo y
   página — exactamente la clave que ya extraemos. Contenido curado por la
   Corte, gratis, que hace dos cosas: hace legible cada resultado **y** trae
@@ -306,7 +306,7 @@ pendiente: se puede empezar hoy.*
     `tests/test_sumarios.py` (parseo puro + `red` contra el sitio real).
     Detalle en `docs/qa/bitacora-PR-C2a.md`.
 
-  - [ ] **PR-C2b — persistir + mostrar el sumario + filtro por voz.**
+  - [x] **PR-C2b — persistir + mostrar el sumario + filtro por voz.**
     Tabla(s) `sumarios`/`voces` (+ `fallo_voces`) con su migración; traer los
     sumarios por fallo en la ingesta (o un `spectre sumarios sync`) y
     persistirlos; `/api/fallos/{cita}` y los resultados de `/api/buscar`
@@ -314,6 +314,17 @@ pendiente: se puede empezar hoy.*
     con autocompletado sobre el tesauro). Evaluar `analisisDocumental.
     materiaSecretaria` para el filtro por materia/rama. **Acá se cumple el
     criterio de aceptación de PR-C2.**
+    *Hecho:* migración `0005_sumarios.sql` (tablas `sumarios` / `voces` /
+    `fallo_voces`, aditiva); módulo nuevo `spectre/sumarios/` con
+    `sincronizar_tomo` (compone el cliente de C2a + `db/repo.py`, **no** es
+    una etapa del pipeline); `spectre sumarios sync <tomo>` / `status` y el
+    botón "Sincronizar sumarios" en la Biblioteca (`POST
+    /api/tomos/{n}/sumarios/sync`, en segundo plano). `/api/fallos/{cita}` y
+    cada resultado de `/api/buscar` traen sus `sumarios`; `/api/buscar` acepta
+    `voz` y `materia` (subconsultas en `filtrar_chunks`), con autocompletado
+    de voces contra la tabla local (`GET /api/voces`) y `<select>` de materia
+    (`GET /api/materias`). `analisisDocumental.materiaSecretaria` se persiste
+    (`sumarios.materia`) y se filtra. Detalle en `docs/qa/bitacora-PR-C2b.md`.
 
 - [ ] **PR-C5 `[N]` Filtro por tipo de parte**
   La observación 01 pidió filtrar por "las partes, p. ej. que una sea una
@@ -420,13 +431,12 @@ MRR 0,71) para medir lo que venga.
 
 En curso: **Tanda C.** La segunda sesión de observación no se pudo hacer
 todavía, así que la Tanda B sigue esperando y se avanza por C (decidido con
-Kevin el 07/09/2026). **PR-C1 cerrado** (citas). **PR-C2a cerrado**: spike de
-sumarios + el cliente `spectre/corpus/csjn/sumarios.py` (los sumarios y sus
-voces se consultan por tomo/página, JSON, sin OCR; detalle en
-`docs/qa/spike-C2-sumarios.md`). Próximo a elección: **PR-C2b** (persistir el
-sumario + mostrarlo + filtro por voz — cierra el criterio de PR-C2), PR-C5
-(filtro por tipo de parte), o los `[V]` PR-C3 (reranker, ya tiene el set de
-PR-A6) / PR-C4 (memoria de la ingesta).
+Kevin el 07/09/2026). **PR-C1 cerrado** (citas). **PR-C2 cerrado** (C2a: spike
++ cliente; C2b: persistir + mostrar el sumario + filtro por voz / materia — la
+sincronización es `spectre sumarios sync` / botón en la Biblioteca, no una
+etapa del pipeline). Próximo a elección: PR-C5 (filtro por tipo de parte), o
+los `[V]` PR-C3 (reranker, ya tiene el set de PR-A6) / PR-C4 (memoria de la
+ingesta).
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
@@ -434,7 +444,7 @@ con registro en vivo antes de arrancar B1–B3. Excepciones que no dependen de
 eso y se pueden adelantar: **PR-B1** (reflow de párrafos) y **PR-B6** (más
 resultados con paginación).
 
-Tanda C: **en curso**. PR-C1 y PR-C2a cerrados; PR-C2b / C5 / C3 / C4 sin
+Tanda C: **en curso**. PR-C1 y PR-C2 (C2a + C2b) cerrados; C5 / C3 / C4 sin
 arrancar.
 
 Tandas D, E: sin arrancar. D espera la decisión D-16. E arranca por

@@ -127,6 +127,7 @@ def test_estado_refleja_tomos_y_chunks_reales(datos_tmp):
             "etapas_hechas": 8,
             "etapas_total": 8,
             "error": None,
+            "sumarios": 0,
         }
     ]
 
@@ -885,3 +886,137 @@ def test_subir_pdf_termina_indexado(datos_tmp, _modelo_falso):
 
     s = get_settings()
     assert (s.tomos_dir / "348.pdf").is_file()
+
+
+# --- sumarios oficiales (PR-C2b) ----------------------------------------- #
+
+
+def test_fallo_detalle_incluye_sumarios(datos_tmp):
+    conn, repo = _base_migrada()
+    _tomo_id, fallo_id = _fallo_con_secciones(
+        repo,
+        cita="348:34",
+        numero=348,
+        secciones=[("mayoria", None, "Texto del fallo.")],
+        pagina_inicio=34,
+        pagina_fin=40,
+    )
+    texto = "El interés se devenga desde la queja."
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id, [(0, texto, ["DEPOSITO PREVIO"], "ADMIN", "1")]
+    )
+    conn.close()
+
+    cuerpo = _cliente().get("/api/fallos/348:34").json()
+    assert len(cuerpo["sumarios"]) == 1
+    s = cuerpo["sumarios"][0]
+    assert s["texto"].startswith("El interés se devenga")
+    assert s["voces"] == ["DEPOSITO PREVIO"]
+    assert s["materia"] == "ADMIN"
+
+
+def test_fallo_detalle_sin_sumarios_da_lista_vacia(datos_tmp):
+    conn, repo = _base_migrada()
+    _fallo_con_secciones(repo, cita="348:1", secciones=[("mayoria", None, "texto")])
+    conn.close()
+    assert _cliente().get("/api/fallos/348:1").json()["sumarios"] == []
+
+
+def test_buscar_incluye_sumarios_y_filtra_por_voz(datos_tmp):
+    conn, repo = _base_migrada()
+    f1 = _fallo_con_seccion_y_chunks(
+        repo, cita="348:1", textos=["prescripción de la acción penal desde el hecho"]
+    )
+    f2 = _fallo_con_seccion_y_chunks(
+        repo, cita="348:2", textos=["prescripción de la acción penal en otro caso"]
+    )
+    repo.reemplazar_sumarios_de_fallo(
+        f1, [(0, "Doctrina sobre la prescripción.", ["PRESCRIPCION"], "PENAL", None)]
+    )
+    repo.reemplazar_sumarios_de_fallo(
+        f2, [(0, "Otra doctrina.", ["COSTAS"], "PROCESAL", None)]
+    )
+    conn.close()
+
+    def _citas(**extra):
+        params = {"q": "prescripción de la acción penal", "solo_lexico": "true"}
+        params.update(extra)
+        return _cliente().get("/api/buscar", params=params).json()["resultados"]
+
+    todos = _citas()
+    assert {r["cita"] for r in todos} == {"348:1", "348:2"}
+    por_cita = {r["cita"]: r for r in todos}
+    assert por_cita["348:1"]["sumarios"][0]["voces"] == ["PRESCRIPCION"]
+    assert por_cita["348:2"]["sumarios"][0]["texto"] == "Otra doctrina."
+
+    solo_voz = _citas(voz="prescripcion")
+    assert [r["cita"] for r in solo_voz] == ["348:1"]
+    solo_materia = _citas(materia="PROCESAL")
+    assert [r["cita"] for r in solo_materia] == ["348:2"]
+    assert _citas(voz="no existe") == []
+
+
+def test_endpoint_voces_autocompleta_contra_lo_local(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1", pagina_inicio=1)
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id,
+        [(0, "x", ["CONTRATO ADMINISTRATIVO", "CONTRATO DE TRABAJO"], None, None)],
+    )
+    conn.close()
+
+    datos = _cliente().get("/api/voces", params={"q": "contrato"}).json()
+    assert [v["valor"] for v in datos["voces"]] == [
+        "CONTRATO ADMINISTRATIVO",
+        "CONTRATO DE TRABAJO",
+    ]
+    assert _cliente().get("/api/voces", params={"q": "zzz"}).json() == {"voces": []}
+    assert _cliente().get("/api/voces", params={"q": ""}).status_code == 422
+
+
+def test_endpoint_materias_lista_las_del_corpus(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1", pagina_inicio=1)
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id, [(0, "x", [], "PENAL", None), (1, "y", [], "ADMIN", None)]
+    )
+    conn.close()
+    assert _cliente().get("/api/materias").json() == {"materias": ["ADMIN", "PENAL"]}
+
+
+def test_estado_incluye_conteo_de_sumarios_por_tomo(datos_tmp):
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    repo.actualizar_tomo(tomo_id, estado="indexado")
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1", pagina_inicio=1)
+    repo.reemplazar_sumarios_de_fallo(
+        fallo_id, [(0, "a", [], None, None), (1, "b", [], None, None)]
+    )
+    conn.close()
+    assert _cliente().get("/api/estado").json()["tomos"][0]["sumarios"] == 2
+
+
+def test_sync_sumarios_tomo_inexistente_da_404(datos_tmp):
+    conn, _repo = _base_migrada()
+    conn.close()
+    assert _cliente().post("/api/tomos/999/sumarios/sync").status_code == 404
+
+
+def test_sync_sumarios_lanza_la_tarea_en_segundo_plano(monkeypatch, datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348, estado="indexado")
+    conn.close()
+
+    llamadas = []
+    import spectre.api.app as app_mod
+
+    monkeypatch.setattr(
+        app_mod, "sincronizar_tomo", lambda c, n, **kw: llamadas.append(n)
+    )
+
+    r = _cliente().post("/api/tomos/348/sumarios/sync")
+    assert r.status_code == 202
+    assert r.json()["numero"] == 348
+    assert llamadas == [348]

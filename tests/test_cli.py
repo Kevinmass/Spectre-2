@@ -365,6 +365,75 @@ def test_csjn_sin_accion_es_error():
     assert exc.value.code != 0
 
 
+# --- sumarios sync / status (PR-C2b) ----------------------------------- #
+
+
+def test_sumarios_sync_llama_al_sincronizador_e_imprime_el_resumen(
+    capsys, datos_tmp, monkeypatch
+):
+    from spectre.db import Repo, connect, migrate
+    from spectre.sumarios import ResumenSync
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    migrate(conn)
+    Repo(conn).insert_tomo(348, estado="indexado")
+    conn.close()
+
+    import spectre.sumarios as sumarios_mod
+
+    monkeypatch.setattr(
+        sumarios_mod,
+        "sincronizar_tomo",
+        lambda *a, **k: ResumenSync(
+            tomo=348,
+            fallos_consultados=3,
+            fallos_con_sumario=2,
+            sumarios_totales=5,
+            voces_distintas=7,
+        ),
+    )
+
+    assert main(["sumarios", "sync", "348"]) == 0
+    out = capsys.readouterr().out
+    assert "fallos con sumario  2" in out
+    assert "voces distintas     7" in out
+
+
+def test_sumarios_sync_tomo_no_indexado_revienta(datos_tmp):
+    from spectre.db import connect, migrate
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    migrate(conn)
+    conn.close()
+
+    with pytest.raises(SystemExit) as exc:
+        main(["sumarios", "sync", "500"])
+    assert "no existe el tomo 500" in str(exc.value)
+
+
+def test_sumarios_status_lista_conteos(capsys, datos_tmp):
+    from spectre.db import Repo, connect, migrate
+
+    s = get_settings()
+    s.ensure_dirs()
+    conn = connect(s.db_path)
+    migrate(conn)
+    repo = Repo(conn)
+    tomo_id = repo.insert_tomo(348, estado="indexado")
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:1", pagina_inicio=1)
+    repo.reemplazar_sumarios_de_fallo(fallo_id, [(0, "x", ["V"], None, None)])
+    conn.close()
+
+    assert main(["sumarios", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "sumarios: 1" in out
+    assert "tomo 348: 1 sumario(s)" in out
+
+
 # --- ingest (PR-19) ------------------------------------------------------- #
 
 
