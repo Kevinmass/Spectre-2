@@ -200,9 +200,54 @@ def test_buscar_solo_lexico_encuentra_por_texto(datos_tmp):
     resultado = cuerpo["resultados"][0]
     assert resultado["cita"] == "348:1"
     assert resultado["caratula"] == "Pérez, Juan c/ Estado Nacional"
-    assert resultado["seccion_tipo"] == "disidencia"
-    assert resultado["seccion_autor"] == "Rosenkrantz"
-    assert "prescripci" in resultado["extracto"].lower()
+    assert resultado["total_pasajes"] == 1
+    assert len(resultado["pasajes"]) == 1
+    pasaje = resultado["pasajes"][0]
+    assert pasaje["seccion_tipo"] == "disidencia"
+    assert pasaje["seccion_autor"] == "Rosenkrantz"
+    assert "prescripci" in pasaje["extracto"].lower()
+
+
+def test_buscar_agrupa_los_pasajes_de_un_fallo_en_un_solo_resultado(datos_tmp):
+    """Dos secciones distintas del mismo fallo matchean: un resultado, dos
+    pasajes (uno por tipo), sin repetir la cita — el defecto §2.1 del plan v2
+    era que cada pasaje era un resultado y una sentencia tapaba a las demás."""
+    conn, repo = _base_migrada()
+    tomo_id = repo.insert_tomo(348)
+    fallo_id = repo.insert_fallo(tomo_id, "A c/ B", cita="348:7")
+    ids = {}
+    for tipo in ("mayoria", "disidencia"):
+        cur = repo.conn.execute(
+            "INSERT INTO secciones (fallo_id, tipo, orden) VALUES (?, ?, 0)",
+            (fallo_id, tipo),
+        )
+        ids[tipo] = cur.lastrowid
+    repo.conn.commit()
+    repo.insert_chunks(
+        fallo_id,
+        [
+            (ids["mayoria"], 0, "el amparo procede contra el Estado", None),
+            (ids["mayoria"], 1, "amparo y Estado otra vez en la mayoría", None),
+            (
+                ids["disidencia"],
+                2,
+                "en disidencia el amparo contra el Estado no procede",
+                None,
+            ),
+        ],
+    )
+    conn.close()
+
+    cuerpo = (
+        _cliente()
+        .get("/api/buscar", params={"q": "amparo Estado", "solo_lexico": "true"})
+        .json()
+    )
+    assert [r["cita"] for r in cuerpo["resultados"]] == ["348:7"]
+    resultado = cuerpo["resultados"][0]
+    assert resultado["total_pasajes"] == 3
+    tipos = {p["seccion_tipo"] for p in resultado["pasajes"]}
+    assert tipos == {"mayoria", "disidencia"}
 
 
 def test_buscar_sin_resultados_da_lista_vacia_no_error(datos_tmp):

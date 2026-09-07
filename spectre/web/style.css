@@ -212,20 +212,49 @@ button.cita:disabled {
   background: var(--dictamen);
 }
 
+.resultado-fecha {
+  color: var(--texto-tenue);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .caratula {
   margin: 0.4rem 0 0;
   color: var(--texto-tenue);
   font-style: italic;
 }
 
+.pasajes {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pasaje {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
 .extracto {
   margin: 0.5rem 0 0;
+}
+
+.pasaje .extracto {
+  margin: 0;
 }
 
 .extracto mark {
   background: var(--marca);
   color: inherit;
   border-radius: 2px;
+}
+
+.pasajes-mas {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--texto-tenue);
 }
 
 .volver {

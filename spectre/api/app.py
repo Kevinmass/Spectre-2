@@ -16,7 +16,11 @@ lectura:
   request sería demasiado lento para el criterio de PR-21, "menos de 3
   segundos"); si `sentence-transformers` no está instalado, degrada sola a
   léxico puro (D-6 no ata la búsqueda a que el modelo real esté disponible)
-  y lo dice en la respuesta (`modo`), no lo oculta.
+  y lo dice en la respuesta (`modo`), no lo oculta. Desde PR-A1 la respuesta
+  va **agrupada por fallo**: cada resultado es un fallo con sus `pasajes`
+  anidados (uno por tipo de sección) y `total_pasajes` para el contador
+  "N pasajes más" — antes eran chunks sueltos y una misma sentencia tapaba a
+  las demás (relevamiento del plan v2, §2.1).
 - `/api/fallos/{cita}` (PR-22): el fallo completo por secciones + metadatos +
   citas salientes. Las citas se recalculan sobre el texto ya persistido
   (`extraer_citas`, PR-10) porque el pipeline (PR-19) decidió a propósito no
@@ -68,7 +72,7 @@ from spectre.db import Repo, Tomo, connect, migrate
 from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
 from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
-from spectre.search import buscar_hibrido
+from spectre.search import agrupar_por_fallo, buscar_hibrido
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -224,44 +228,46 @@ def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:
 
         conn: sqlite3.Connection = connect(s.db_path)
         try:
-            repo = Repo(conn)
             idx_vectorial = IndiceVectorial(s.vectors_dir)
+            # Se fusiona hasta `candidatos` chunks (no `k`) y recién después se
+            # agrupa: si se cortara en `k` chunks, `k` fallos distintos no
+            # entrarían nunca (una sentencia con varios pasajes se comería los
+            # lugares). `agrupar_por_fallo` deja los `k` mejores fallos.
             fusionados = buscar_hibrido(
                 conn,
                 idx_vectorial,
                 consulta,
                 vector,
-                k=k,
+                k=candidatos,
                 candidatos=candidatos,
                 anio=anio,
                 tribunal_origen=tribunal,
                 tipo_seccion=seccion,
             )
+            agrupados = agrupar_por_fallo(conn, fusionados, limite=k)
 
             terminos = _terminos(consulta)
-            resultados = []
-            for r in fusionados:
-                chunk = repo.get_chunk(r.chunk_id)
-                if chunk is None:
-                    continue
-                fallo = repo.get_fallo(chunk.fallo_id)
-                seccion_fila = (
-                    repo.get_seccion(chunk.seccion_id)
-                    if chunk.seccion_id is not None
-                    else None
-                )
-                resultados.append(
-                    {
-                        "cita": fallo.cita if fallo else None,
-                        "caratula": fallo.caratula if fallo else None,
-                        "fecha": fallo.fecha if fallo else None,
-                        "seccion_tipo": seccion_fila.tipo if seccion_fila else None,
-                        "seccion_autor": seccion_fila.autor if seccion_fila else None,
-                        "pagina_oficial": chunk.pagina_oficial,
-                        "extracto": _extracto(chunk.texto, terminos),
-                        "score": r.score,
-                    }
-                )
+            resultados = [
+                {
+                    "cita": g.cita,
+                    "caratula": g.caratula,
+                    "fecha": g.fecha,
+                    "tribunal_origen": g.tribunal_origen,
+                    "score": g.score,
+                    "total_pasajes": g.total_pasajes,
+                    "pasajes": [
+                        {
+                            "seccion_tipo": p.seccion_tipo,
+                            "seccion_autor": p.seccion_autor,
+                            "pagina_oficial": p.pagina_oficial,
+                            "extracto": _extracto(p.texto, terminos),
+                            "score": p.score,
+                        }
+                        for p in g.pasajes
+                    ],
+                }
+                for g in agrupados
+            ]
             return {"consulta": consulta, "modo": modo, "resultados": resultados}
         finally:
             conn.close()
