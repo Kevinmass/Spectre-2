@@ -28,7 +28,9 @@ por etapa por tomo; `tomos.estado` es el progreso consultable, con su
 vocabulario fijado por el CHECK de `0004_tomos_estado_check.sql`),
 `spectre/corpus/pdf/` (`extract` + `clean` + `quality`: clasifica un tomo en
 `digital` / `requiere_ocr` según caracteres por página), `spectre/corpus/fallo/`
-(`index_parser` + `segmenter` + `structure` + `sections` + `citations`),
+(`index_parser` + `segmenter` + `structure` + `sections` + `citations` +
+`partes`: PR-C5, `clasificar_parte` → persona_fisica / empresa / estado /
+organismo / None por reglas + listas sobre el string de la parte),
 `spectre/corpus/csjn/` (`catalog`: lista los tomos del sitio oficial — número,
 volumen, año, id CSJN — sin persistir; `download`: baja el PDF de un tomo con
 reintentos y caché por archivo, sin resume por Range —el servidor lo ignora—,
@@ -43,7 +45,12 @@ sus sumarios y los persiste en `sumarios` / `voces` / `fallo_voces`
 (migración `0005`); reejecutable, reemplaza sin acumular—; **no es una etapa
 del pipeline**: se dispara con `spectre sumarios sync` o el botón de la
 Biblioteca (`POST /api/tomos/{n}/sumarios/sync`, en segundo plano)),
-`spectre/chunking/`
+`spectre/partes/` (PR-C5: `reclasificar_partes(conn, tomo=None)` —recomputa
+`actor` / `demandado` y su tipo desde `fallos.caratula`, **sin abrir PDFs**;
+reejecutable; comando `spectre partes reclasificar` / `status` y botón
+"Clasificar las partes" en la Biblioteca, `POST /api/fallos/reclasificar-partes`
+síncrono. La etapa `estructurar` del pipeline ya los persiste para los tomos
+nuevos), `spectre/chunking/`
 (`chunker`: ventanas de ~400 palabras por sección), `spectre/embed/`
 (`base.EmbeddingModel` + `local_st.ModeloLocalST`, sentence-transformers
 detrás del extra opcional `[embed]`), `spectre/index/`
@@ -51,8 +58,10 @@ detrás del extra opcional `[embed]`), `spectre/index/`
 `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
 SQLite, sincronizada sola por triggers), `spectre/search/`
 (`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de rango
-de años / tribunal / tipo de sección / voz / materia (PR-C2b: voz y materia
-salen de los sumarios oficiales cargados); `agrupar.agrupar_por_fallo` (PR-A1)
+de años / tribunal / tipo de sección / voz / materia / tipo de parte (PR-C2b:
+voz y materia salen de los sumarios oficiales; PR-C5: `parte_tipo` deja pasar
+el fallo si actor **o** demandado es de ese tipo); `agrupar.agrupar_por_fallo`
+(PR-A1)
 colapsa los chunks a fallos con pasajes anidados;
 `palabras_vacias.PALABRAS_VACIAS` (PR-A4), la lista de función-palabras del
 castellano —gemela de la de `spectre/web/app.js`—), `spectre/api/`
@@ -65,9 +74,11 @@ modelo de embeddings por instancia de app y degrada sola a léxico puro si
 módulo aparte de `hybrid.py`): cada resultado es un fallo con sus `pasajes`
 anidados (uno por tipo de sección, el de más puntaje) y `total_pasajes` para
 el contador "N pasajes más"; PR-C2b: acepta además `voz` y `materia` (salen de
-los sumarios oficiales cargados) y cada resultado trae sus `sumarios` —, `GET
+los sumarios oficiales cargados) y cada resultado trae sus `sumarios`; PR-C5:
+acepta `parte` (persona_fisica / empresa / estado / organismo) —, `GET
 /api/fallos/{cita}` — PR-22 + PR-C1: el
-fallo completo por secciones + metadatos + citas **salientes** (a qué
+fallo completo por secciones + metadatos (con las partes y su tipo, PR-C5) +
+citas **salientes** (a qué
 precedentes cita) y **entrantes** (qué fallos del corpus indexado lo citan) +
 sus `sumarios` oficiales (PR-C2b).
 PR-C1 terminó lo que PR-10 dejó a medias: la etapa `estructurar` del pipeline
@@ -89,8 +100,9 @@ Starlette (el hilo del pool que ya trae el framework, no un worker casero) y
 devuelven 202 al toque; PR-C2b agrega una tercera, `POST
 /api/tomos/{numero}/sumarios/sync` (corre `sumarios.sincronizar_tomo` en
 segundo plano, mismo patrón), más los `GET /api/voces?q=` (autocompletado del
-filtro por voz, contra la tabla local) y `GET /api/materias`; `GET
-/api/estado` agrega por tomo `etapas_hechas`/
+filtro por voz, contra la tabla local) y `GET /api/materias`; PR-C5 agrega
+`POST /api/fallos/reclasificar-partes` (síncrono: es instantáneo, no abre
+PDFs); `GET /api/estado` agrega por tomo `etapas_hechas`/
 `etapas_total` (de `jobs.progreso`), el `error` de la última etapa fallida
 si la hay, y el conteo de `sumarios` (PR-C2b) — ninguna de las rutas de
 escritura reintenta sola una etapa ya fallida, mismo comportamiento que
@@ -108,20 +120,23 @@ resaltado en `<mark>` —PR-A3: sin palabras vacías del castellano y con
 límites de palabra Unicode, "sin" ya no marca "sino"—, etiqueta de sección
 mayoría/voto/disidencia/dictamen, el sumario oficial de la CSJN cuando existe
 (PR-C2b: "Sumario oficial de la CSJN", con la materia y las voces como chips),
-y una fila de filtros (PR-A2/C2b): tribunal,
+y una fila de filtros (PR-A2/C2b/C5): tribunal,
 sección, rango de años, "solo texto", voz (input con `<datalist>` que
-autocompleta contra `/api/voces`) y materia (`<select>` de `/api/materias`),
+autocompleta contra `/api/voces`), materia (`<select>` de `/api/materias`) y
+tipo de parte (`<select>`: persona física / empresa / Estado / organismo),
 que se aplican sobre la búsqueda a la
 vista—, la vista de fallo muestra el
-texto completo por sección, metadatos, sus sumarios oficiales (PR-C2b), citas
+texto completo por sección, metadatos (con las partes y su tipo, PR-C5), sus
+sumarios oficiales (PR-C2b), citas
 salientes y entrantes (PR-C1:
 "Citado por", con la carátula y la cita del fallo citante, clickeable) y el
 enlace al PDF en
 la página exacta del fragmento que trajo el resultado, y Biblioteca (PR-23)
 lista los tomos con su progreso y su conteo de sumarios (sondeado cada 2s
 mientras la pestaña está a
-la vista) y tiene tres formularios —indexar por `csjn_tomo_id`, subir un
-PDF, o sincronizar los sumarios de un tomo (PR-C2b)— para lanzar el trabajo
+la vista) y tiene cuatro formularios —indexar por `csjn_tomo_id`, subir un
+PDF, sincronizar los sumarios de un tomo (PR-C2b), o clasificar las partes de
+todo el corpus (PR-C5)— para lanzar el trabajo
 desde la UI). `spectre serve` levanta ese
 servidor y abre el navegador. `scripts/arrancar.ps1` (Windows) /
 `scripts/arrancar.sh` (macOS/Linux) — PR-24: crean el venv, instalan
@@ -163,6 +178,15 @@ muestran el/los sumario(s); `/api/buscar` filtra por `voz` y por `materia`
 lo que el corpus tiene (`GET /api/voces`), no contra el tesauro vivo. Medido
 sobre el Tomo 348: 132/133 fallos con sumario, 591 sumarios, 420 voces
 (`docs/qa/bitacora-PR-C2b.md`).
+PR-C5 cerrado (filtro por tipo de parte). `corpus/fallo/partes.py` clasifica
+cada parte de la carátula en persona_fisica / empresa / estado / organismo (o
+`None`: asociaciones civiles y afines no entran en la taxonomía de 4 tipos) por
+reglas + listas. Migración `0006` agrega `actor` / `actor_tipo` / `demandado` /
+`demandado_tipo` a `fallos` (ADD COLUMN, con CHECK de dominio). La etapa
+`estructurar` los persiste; `spectre partes reclasificar` (o el botón) hace el
+backfill del corpus viejo desde las carátulas ya en la base. `/api/buscar`
+filtra por `parte`, la vista de fallo muestra las partes con su tipo. Cobertura
+medida sobre 348 + 349: **84 % (480/572 partes)** (`docs/qa/bitacora-PR-C5.md`).
 Deuda conocida que sigue abierta: la ingesta pica 5,3 GB de memoria (PR-C4).
 
 ## Reglas de trabajo
@@ -258,6 +282,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     Secretaría (con pausa), y vuelca a `sumarios` / `voces` / `fallo_voces`
     (reejecutable, reemplaza sin acumular). Necesita red real; tarda.
     `spectre sumarios status` — cuántos sumarios / voces hay cargados, por tomo.
+  - `spectre partes reclasificar [--tomo N]` — recalcula `actor` / `demandado`
+    y su tipo (persona_fisica / empresa / estado / organismo) de los fallos ya
+    indexados, desde sus carátulas (PR-C5). No abre PDFs, no necesita red, es
+    instantáneo, reejecutable. `spectre partes status` — la cobertura de la
+    clasificación sin recalcular.
   - `spectre pdf stats <pdf>` — extrae el texto de un tomo y mide cobertura del
     número de página oficial y el offset (criterio de aceptación de PR-04).
   - `spectre pdf clean <pdf> [--muestra N]` — limpia el texto del cuerpo
@@ -292,12 +321,13 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
   - `spectre search buscar "<consulta>" [--k N] [--candidatos N]
     [--anio-desde AAAA] [--anio-hasta AAAA] [--tribunal T]
     [--seccion mayoria|voto|disidencia|dictamen] [--voz V] [--materia M]
-    [--solo-lexico]` — fusiona
+    [--parte persona_fisica|empresa|estado|organismo] [--solo-lexico]` — fusiona
     léxico + vectorial por RRF (PR-15); embebe la consulta con el modelo real
     salvo que se pase `--solo-lexico` (no necesita `[embed]` en ese caso). El
     año es un rango inclusivo (PR-A2); se pueden pasar los dos límites o uno
     solo. `--voz` / `--materia` (PR-C2b) filtran por los sumarios oficiales
-    cargados (`spectre sumarios sync`).
+    cargados (`spectre sumarios sync`); `--parte` (PR-C5) filtra a fallos donde
+    actor o demandado es de ese tipo (`spectre partes reclasificar`).
   - `spectre ingest <numero> [--pdf RUTA] [--csjn-tomo-id ID]` — corre el
     pipeline completo sobre un tomo (descargar → extraer → limpiar →
     segmentar → estructurar → fragmentar → embeber → indexar) y persiste todo
@@ -319,14 +349,16 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     texto"), PR-A3/A4 limpian el resaltado y los bordes del extracto, y PR-A5
     hace que escribir una cita en el buscador salte directo al fallo. Clickear
     un resultado abre la vista de fallo (PR-22): texto completo por sección,
-    metadatos, sus sumarios oficiales (PR-C2b), citas salientes y el enlace al
+    metadatos (con las partes y su tipo, PR-C5), sus sumarios oficiales
+    (PR-C2b), citas salientes y el enlace al
     PDF original en la página exacta
     del fragmento. La pestaña
     Biblioteca (PR-23) lista los tomos con su progreso y su conteo de sumarios
-    y tiene tres
+    y tiene cuatro
     formularios para lanzar trabajo desde la UI: indexar por `csjn_tomo_id`
-    (D-9), subir un PDF a mano, o sincronizar los sumarios de un tomo (PR-C2b)
-    — los tres corren en
+    (D-9), subir un PDF a mano, sincronizar los sumarios de un tomo (PR-C2b) o
+    clasificar las partes de todo el corpus (PR-C5) — los primeros tres corren
+    en
     segundo plano (no bloquean el servidor) y el progreso se ve solo, sin
     recargar la página.
 - `scripts/arrancar.ps1` (Windows) / `scripts/arrancar.sh` (macOS/Linux) —

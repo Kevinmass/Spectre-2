@@ -2,7 +2,8 @@
 citas.
 
 Hoy `index_parser` (PR-06), `segmenter` (PR-07), `structure` (PR-08),
-`sections` (PR-09) y `citations` (PR-10).
+`sections` (PR-09), `citations` (PR-10) y `partes` (PR-C5: clasifica actor /
+demandado en persona_fisica / empresa / estado / organismo).
 """
 
 from spectre.corpus.fallo.citations import (
@@ -17,6 +18,7 @@ from spectre.corpus.fallo.index_parser import (
     localizar_indice_partes,
     parsear_indice,
 )
+from spectre.corpus.fallo.partes import clasificar_parte
 from spectre.corpus.fallo.sections import SeccionFallo, partir_secciones
 from spectre.corpus.fallo.segmenter import (
     FalloSegmentado,
@@ -41,6 +43,7 @@ __all__ = [
     "ResumenSegmentacion",
     "SeccionFallo",
     "analizar_indice",
+    "clasificar_parte",
     "contar_referencias",
     "extraer_citas",
     "extraer_metadatos",

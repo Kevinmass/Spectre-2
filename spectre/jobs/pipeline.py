@@ -248,6 +248,10 @@ def _h_estructurar(conn: sqlite3.Connection, job: Job) -> None:
             jueces=json.dumps(meta.jueces, ensure_ascii=False),
             tribunal_origen=meta.tribunal_origen,
             tipo_recurso=meta.tipo_recurso,
+            actor=meta.actor,
+            actor_tipo=meta.actor_tipo,
+            demandado=meta.demandado,
+            demandado_tipo=meta.demandado_tipo,
         )
 
         # Citas salientes a precedentes (PR-C1, termina PR-10). Borrar primero:

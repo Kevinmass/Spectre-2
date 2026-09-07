@@ -62,6 +62,16 @@
           </select>
         </label>
         <label>
+          Tipo de parte
+          <select id="filtro-parte">
+            <option value="">cualquiera</option>
+            <option value="persona_fisica">persona física</option>
+            <option value="empresa">empresa</option>
+            <option value="estado">Estado</option>
+            <option value="organismo">organismo público</option>
+          </select>
+        </label>
+        <label>
           Año desde
           <input type="number" id="filtro-anio-desde" min="1863" max="2100" step="1" />
         </label>
@@ -137,6 +147,16 @@
             fallo. El avance se ve en la columna «Sumarios».
           </p>
           <button type="submit">Sincronizar sumarios</button>
+        </form>
+
+        <form id="form-clasificar-partes" class="form-tomo">
+          <h3>Clasificar las partes</h3>
+          <p class="ayuda-form">
+            Recalcula el tipo de cada parte (persona física / empresa / Estado /
+            organismo público) de todos los fallos indexados, a partir de sus
+            carátulas. Es instantáneo y se puede repetir.
+          </p>
+          <button type="submit">Clasificar partes</button>
         </form>
       </div>
       <p id="biblioteca-aviso" class="vacio" hidden></p>

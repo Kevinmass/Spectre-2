@@ -168,6 +168,24 @@ def test_partes_sin_c_barra_una_sola_parte():
     assert m.demandado is None
 
 
+def test_partes_tipo_clasificado():
+    """PR-C5: `extraer_metadatos` clasifica cada parte."""
+    m = extraer_metadatos(
+        "", caratula="Y.P.F. S.A. c/ Provincia de Mendoza s/ acción declarativa"
+    )
+    assert m.actor_tipo == "empresa"
+    assert m.demandado_tipo == "estado"
+
+    m2 = extraer_metadatos("", caratula="Pérez, Juan c/ Banco Central s/ amparo")
+    assert m2.actor_tipo == "persona_fisica"
+    assert m2.demandado_tipo == "organismo"
+
+    # sin demandado, sin tipo de demandado
+    m3 = extraer_metadatos("", caratula="N.N. s/ incidente")
+    assert m3.actor_tipo == "persona_fisica"
+    assert m3.demandado_tipo is None
+
+
 # --- texto_del_fallo ---------------------------------------------- #
 
 
