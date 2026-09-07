@@ -184,11 +184,16 @@ pendiente: se puede empezar hoy.*
   Verificado con `node tests/verificar_cita.mjs`. Detalle en
   `docs/qa/bitacora-PR-A5.md`.
 
-- [ ] **PR-A6 `[N]` Set de evaluación de búsqueda**
+- [x] **PR-A6 `[N]` Set de evaluación de búsqueda**
   20 consultas con el fallo esperado, versionadas en el repo, y un test que
   mide *recall@10* y *MRR*. **Sin esto no se puede decir si el reranker de la
   Tanda C mejora algo**, y tampoco si A1 rompió el ranking.
   *Entrega:* `docs/qa/eval-busqueda.md` con el número de partida.
+  *Hecho:* `tests/fixtures/eval-busqueda.jsonl` (20 consultas + cita
+  esperada), `tests/test_eval_busqueda.py` (`slow`, contra `data/spectre.db`)
+  y `docs/qa/eval-busqueda.md`. **Línea de base (tomos 348+349): recall@10 =
+  0,90 · MRR = 0,7125.** Dos consultas fallan hoy (previsional y una consulta
+  penal de dos ejes) — candidatas a mejorar con PR-C3.
 
 ---
 
@@ -349,8 +354,15 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0 a PR-A5 cerrados**. Falta **PR-A6** (set de evaluación de
-búsqueda) para cerrar la tanda. No depende de nada pendiente.
+Tanda A: **cerrada** (PR-A0 a PR-A6). Los resultados agrupan por fallo, hay
+filtros (con año por rango), el resaltado y los extractos están limpios, se
+busca por cita, y hay un set de evaluación con línea de base (recall@10 0,90 ·
+MRR 0,71) para medir lo que venga.
+
+Próximo: **PR-A1 de la Tanda B (PR-B1, reflow de párrafos)** no depende de
+nada; el resto de la Tanda B necesita una segunda observación con registro en
+vivo (ver §5 y la salvedad de PR-A0). O arrancar la **Tanda C** (PR-C1,
+persistir las citas). Kevin decide.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
