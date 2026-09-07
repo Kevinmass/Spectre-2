@@ -158,10 +158,17 @@ pendiente: se puede empezar hoy.*
   backend (posiciona el extracto) tiene el mismo bug de vacías — lo agarra
   PR-A4. Detalle en `docs/qa/bitacora-PR-A3.md`.
 
-- [ ] **PR-A4 `[N]` Extractos que empiecen donde corresponde**
+- [x] **PR-A4 `[N]` Extractos que empiecen donde corresponde**
   Recortar en borde de palabra, y en borde de oración si hay uno cerca.
   *Acepta:* ningún extracto de las 8 consultas de referencia empieza a mitad
   de palabra.
+  *Hecho:* `_extracto` en `spectre/api/app.py` recorta en borde de palabra y
+  prefiere el comienzo de la oración que contiene el término (fin de oración =
+  `.`/`?`/`!` + espacio + mayúscula, para no cortar en "art. 14"). `_terminos`
+  filtra palabras vacías (`spectre/search/palabras_vacias.py`, gemela de la de
+  `app.js`), así no centra el extracto en un "del". Medido sobre la base real:
+  **0 de 95** extractos de las 8 consultas arrancan a mitad de palabra; 64/95
+  arrancan en oración limpia. Detalle en `docs/qa/bitacora-PR-A4.md`.
 
 - [ ] **PR-A5 `[N]` Buscar por cita**
   `348:145`, `Fallos: 348:145` y `Fallos 348:145` abren ese fallo directo, sin
@@ -334,8 +341,8 @@ del spike delante, no ahora.
 
 ## 10. Estado
 
-Tanda A: **PR-A0 a PR-A3 cerrados**. Próximo: **PR-A4** (extractos que
-empiecen donde corresponde). PR-A4 a PR-A6 no dependen de nada pendiente.
+Tanda A: **PR-A0 a PR-A4 cerrados**. Próximo: **PR-A5** (buscar por cita).
+PR-A5 y PR-A6 no dependen de nada pendiente.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión

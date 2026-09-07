@@ -39,8 +39,12 @@ detrás del extra opcional `[embed]`), `spectre/index/`
 (`vectors.IndiceVectorial`, LanceDB embebido en `data/vectors/`;
 `lexical.IndiceLexico`, FTS5 sobre `chunks_fts` dentro de la propia base
 SQLite, sincronizada sola por triggers), `spectre/search/`
-(`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de año /
-tribunal / tipo de sección), `spectre/api/` (`app.crear_app`: FastAPI que
+(`hybrid.buscar_hibrido`, fusión RRF de los dos índices con filtros de rango
+de años / tribunal / tipo de sección; `agrupar.agrupar_por_fallo` (PR-A1)
+colapsa los chunks a fallos con pasajes anidados;
+`palabras_vacias.PALABRAS_VACIAS` (PR-A4), la lista de función-palabras del
+castellano —gemela de la de `spectre/web/app.js`—), `spectre/api/`
+(`app.crear_app`: FastAPI que
 sirve `spectre/web/` estático y expone `GET /api/estado` — tomos + total de
 chunks —, `GET /api/buscar` — PR-21: envuelve `buscar_hibrido`, cachea el
 modelo de embeddings por instancia de app y degrada sola a léxico puro si
@@ -68,10 +72,11 @@ ya fallida, mismo comportamiento que `spectre ingest` desde PR-19).
 Biblioteca, más una vista de fallo sin tab propio —se llega clickeando un
 resultado—; Buscar ya busca de verdad —campo de consulta, resultados
 agrupados por fallo con sus pasajes anidados (PR-A1), cita `Fallos: N:N`,
-extracto con el término resaltado en `<mark>` —PR-A3: sin palabras vacías del
-castellano y con límites de palabra Unicode, "sin" ya no marca "sino"—,
-etiqueta de sección mayoría/voto/disidencia/dictamen, y una fila de filtros
-(PR-A2): tribunal,
+extracto que arranca en borde de palabra y, si hay una cerca, en el
+principio de la oración que contiene el término (PR-A4), con el término
+resaltado en `<mark>` —PR-A3: sin palabras vacías del castellano y con
+límites de palabra Unicode, "sin" ya no marca "sino"—, etiqueta de sección
+mayoría/voto/disidencia/dictamen, y una fila de filtros (PR-A2): tribunal,
 sección, rango de años y "solo texto", que se aplican sobre la búsqueda a la
 vista—, la vista de fallo muestra el
 texto completo por sección, metadatos, citas salientes y el enlace al PDF en
@@ -97,7 +102,8 @@ quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
 tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
 con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
 **Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo),
-PR-A2 (filtros en la pantalla + año como rango), PR-A3 (resaltado sin ruido).
+PR-A2 (filtros en la pantalla + año como rango), PR-A3 (resaltado sin ruido),
+PR-A4 (extractos que empiezan en borde de palabra / oración).
 Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
 endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
 la ingesta pica 5,3 GB de memoria (PR-C4).
@@ -240,9 +246,9 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
     navegador (PR-20). La pestaña Buscar ya busca de verdad (PR-21):
     `GET /api/buscar` fusiona léxico + vectorial, con cita, extracto
-    resaltado y etiqueta de sección; PR-A1 agrupa los resultados por fallo y
+    resaltado y etiqueta de sección; PR-A1 agrupa los resultados por fallo,
     PR-A2 agrega la fila de filtros (tribunal, sección, rango de años, "solo
-    texto"). Clickear un resultado abre la vista de fallo (PR-22): texto
+    texto"), PR-A3/A4 limpian el resaltado y los bordes del extracto. Clickear un resultado abre la vista de fallo (PR-22): texto
     completo por sección, metadatos, citas salientes y el enlace al PDF
     original en la página exacta del fragmento. La pestaña
     Biblioteca (PR-23) lista los tomos con su progreso y tiene los dos
