@@ -75,7 +75,7 @@ from spectre.db import Repo, Tomo, connect, migrate
 from spectre.embed import EmbeddingModel
 from spectre.index import IndiceVectorial
 from spectre.jobs import correr_pipeline, iniciar_tomo, progreso, siguiente_etapa
-from spectre.search import agrupar_por_fallo, buscar_hibrido
+from spectre.search import PALABRAS_VACIAS, agrupar_por_fallo, buscar_hibrido
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -128,22 +128,65 @@ class _IndexarPayload(BaseModel):
 
 
 def _terminos(consulta: str) -> list[str]:
-    """Palabras de >=3 letras de la consulta, para ubicar dónde recortar el
-    extracto. La misma lista se le manda a la UI para resaltar (D-4: se
-    resalta lo que el usuario pidió, no lo que el ranking decidió)."""
+    """Palabras de contenido de la consulta (>=3 letras, sin palabras vacías
+    del castellano), para ubicar dónde recortar el extracto — sin filtrar las
+    vacías, "responsabilidad del estado" centra el extracto en el primer
+    "del". El resaltado de la UI usa su propia lista gemela
+    (`PALABRAS_VACIAS` en `app.js`)."""
     vistos: dict[str, None] = {}
     for t in re.findall(r"\w+", consulta.lower()):
-        if len(t) > 2:
+        if len(t) > 2 and t not in PALABRAS_VACIAS:
             vistos.setdefault(t, None)
     return list(vistos)
 
 
+def _borde_palabra_adelante(plano: str, i: int) -> int:
+    """La primera posición >= `i` que es principio de palabra (después de un
+    espacio, o el final del texto). Sirve para no arrancar un extracto a
+    mitad de palabra."""
+    n = len(plano)
+    i = max(0, min(i, n))
+    if i == 0 or i == n or plano[i - 1].isspace():
+        return i
+    while i < n and not plano[i].isspace():
+        i += 1
+    while i < n and plano[i].isspace():
+        i += 1
+    return i
+
+
+def _borde_palabra_atras(plano: str, i: int) -> int:
+    """El principio de la palabra que contiene a `i` (o `i` si ya es
+    principio de palabra)."""
+    while i > 0 and not plano[i - 1].isspace():
+        i -= 1
+    return i
+
+
+def _inicio_de_oracion(plano: str, pos: int, *, max_atras: int) -> int | None:
+    """El comienzo de la oración que contiene `pos` (fin de oración = `.`/`?`/
+    `!` + espacio + mayúscula, para no cortar en abreviaturas tipo "art. 14"),
+    si esa oración empieza a no más de `max_atras` caracteres hacia atrás. Si
+    no, `None` — el término está muy adentro de una oración larga y arrancar
+    ahí dejaría un extracto sin contexto."""
+    desde = max(0, pos - max_atras)
+    ultimo = None
+    for m in re.finditer(r"[.?!]\s+(?=[A-ZÁÉÍÓÚÜÑ])", plano[desde:pos]):
+        ultimo = m
+    return desde + ultimo.end() if ultimo is not None else None
+
+
 def _extracto(texto: str, terminos: list[str], *, ventana: int = 220) -> str:
-    """Recorta `texto` (un chunk entero, ~400 palabras) a una ventana que
-    incluya, si puede, la primera aparición de algún término de la consulta
-    — sin eso, un extracto de las primeras 220 letras a veces no contiene ni
-    una palabra buscada."""
+    """Recorta `texto` (un chunk entero, ~400 palabras) a una ventana de
+    ~`ventana` caracteres que incluya, si puede, la primera aparición de
+    algún término de la consulta. El corte respeta bordes de palabra (nunca
+    arranca a mitad de una) y prefiere el principio de la oración que contiene
+    el término si empieza cerca (PR-A4)."""
     plano = " ".join(texto.split())
+    n = len(plano)
+    if n <= ventana:
+        return plano
+
     bajo = plano.lower()
     pos = None
     for t in terminos:
@@ -152,14 +195,26 @@ def _extracto(texto: str, terminos: list[str], *, ventana: int = 220) -> str:
             pos = i
 
     if pos is None:
-        recorte = plano[:ventana]
-        return recorte + ("…" if len(plano) > ventana else "")
+        fin = _borde_palabra_atras(plano, ventana) or ventana
+        return plano[:fin].rstrip() + "…"
 
-    inicio = max(0, pos - ventana // 3)
-    fin = min(len(plano), inicio + ventana)
-    prefijo = "…" if inicio > 0 else ""
-    sufijo = "…" if fin < len(plano) else ""
-    return prefijo + plano[inicio:fin] + sufijo
+    oracion = _inicio_de_oracion(plano, pos, max_atras=ventana // 2)
+    if oracion is not None:
+        inicio, limpio = oracion, True
+    else:
+        inicio = _borde_palabra_adelante(plano, max(0, pos - ventana // 3))
+        if inicio > pos:  # nunca dejar el término fuera del extracto
+            inicio = _borde_palabra_atras(plano, pos)
+        limpio = inicio == 0
+
+    fin = min(n, max(pos + 2 * ventana // 3, inicio + ventana))
+    fin = _borde_palabra_atras(plano, fin)
+    if fin <= pos:  # ventana degenerada: no recortar de más
+        fin = min(n, inicio + ventana)
+
+    prefijo = "" if limpio else "…"
+    sufijo = "" if fin >= n else "…"
+    return prefijo + plano[inicio:fin].strip() + sufijo
 
 
 def crear_app(*, on_startup: Callable[[], None] | None = None) -> FastAPI:

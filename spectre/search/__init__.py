@@ -8,8 +8,10 @@ sus pasajes anidados. Este paquete no importa `corpus/`.
 
 from spectre.search.agrupar import FalloAgrupado, Pasaje, agrupar_por_fallo
 from spectre.search.hybrid import ResultadoHibrido, buscar_hibrido
+from spectre.search.palabras_vacias import PALABRAS_VACIAS
 
 __all__ = [
+    "PALABRAS_VACIAS",
     "FalloAgrupado",
     "Pasaje",
     "ResultadoHibrido",

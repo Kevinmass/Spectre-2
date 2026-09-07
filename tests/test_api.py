@@ -20,6 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from spectre.api import crear_app
+from spectre.api.app import _extracto, _terminos
 from spectre.config import get_settings
 
 
@@ -408,6 +409,65 @@ def test_buscar_el_modelo_se_carga_una_sola_vez_por_app(monkeypatch, datos_tmp):
         assert r.status_code == 200
 
     assert len(llamadas) == 1
+
+
+# --- _terminos / _extracto (PR-A4: extractos que empiecen donde corresponde) --- #
+
+
+def test_terminos_saca_palabras_vacias_y_cortas():
+    assert _terminos("responsabilidad del estado") == ["responsabilidad", "estado"]
+    assert _terminos("el de la por") == []
+    assert _terminos("daño moral") == ["daño", "moral"]
+
+
+def _sin_cortar_palabra(extracto: str, fuente: str) -> bool:
+    """El extracto no arranca a mitad de una palabra de `fuente`."""
+    cuerpo = extracto.lstrip("…").strip()
+    plano = " ".join(fuente.split())
+    idx = plano.find(cuerpo.split(" ")[0])
+    return idx == 0 or plano[idx - 1] == " "
+
+
+def test_extracto_corto_se_devuelve_entero_sin_puntos():
+    texto = "un fallo breve sobre daño moral."
+    assert _extracto(texto, ["daño"]) == texto
+
+
+def test_extracto_no_arranca_a_mitad_de_palabra():
+    # 'responsabilidad' aparece pasada la mitad; con recorte crudo el extracto
+    # empezaría dentro de 'jurisprudencia' o 'consideraciones'.
+    texto = (
+        "En el marco de las consideraciones generales que la jurisprudencia de "
+        "esta Corte ha desarrollado a lo largo de numerosos precedentes sobre la "
+        "materia, corresponde recordar que la responsabilidad del Estado por su "
+        "actividad lícita exige la reunión de ciertos requisitos ineludibles que "
+        "la doctrina y los fallos han precisado con el correr del tiempo."
+    )
+    ext = _extracto(texto, _terminos("responsabilidad del estado"))
+    assert "responsabilidad" in ext
+    assert _sin_cortar_palabra(ext, texto)
+    # arranca en un borde: o limpio, o con "…" seguido de palabra entera
+    cuerpo = ext.lstrip("…")
+    assert cuerpo[:1] != " "
+
+
+def test_extracto_prefiere_arrancar_en_una_oracion():
+    texto = (
+        "Una primera cuestión quedó resuelta en instancias anteriores y no llega "
+        "discutida a esta etapa del proceso judicial. La cámara admitió el "
+        "recurso extraordinario federal por hallarse en juego la interpretación "
+        "de normas de naturaleza federal y su decisión ser contraria al derecho "
+        "que el apelante funda en ellas de manera directa e inmediata."
+    )
+    ext = _extracto(texto, _terminos("recurso extraordinario federal"))
+    assert ext.startswith("La cámara admitió")  # oración entera, sin "…"
+
+
+def test_extracto_termino_cerca_del_inicio_no_lleva_puntos_suspensivos():
+    texto = ("El amparo contra el Estado Nacional " + "palabra " * 60).strip()
+    ext = _extracto(texto, _terminos("amparo contra el estado"))
+    assert ext.startswith("El amparo")
+    assert ext.endswith("…")
 
 
 # --- /api/fallos/{cita} (PR-22) -------------------------------------------- #
