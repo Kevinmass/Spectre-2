@@ -231,6 +231,22 @@ pendiente: se puede empezar hoy.*
   Qué ve alguien que abre Spectre por primera vez y no tiene nada indexado.
   Hoy ve una tabla vacía y dos formularios.
 
+- [ ] **PR-B6 `[N]` Más resultados, con paginación**
+  Hoy la búsqueda muestra 10 fallos y no hay forma de ver más (el backend ya
+  acepta `k` hasta 50 — `/api/buscar`, `Query(10, ge=1, le=50)`). Traer
+  **hasta 20** y paginarlos de a 10, con un paginador **arriba y abajo** de la
+  lista, de modo que al llegar al final —o al principio— se pueda saltar a la
+  otra página sin scrollear de vuelta. Cambio de frontend (pedir `k=20`,
+  partir la lista, render del paginador); el backend no se toca salvo subir el
+  tope de `k` si 20 no alcanza.
+  *No depende de PR-A0:* es mecánico, no una decisión de rediseño — se puede
+  adelantar antes que B1–B5 (el estilo del paginador lo revisa PR-B3 cuando
+  llegue).
+  *Acepta:* una consulta con más de 10 fallos muestra el paginador; ir a la
+  página 2 muestra los resultados 11–20; el paginador está tanto arriba como
+  abajo de la lista y los filtros y la consulta sobreviven al cambio de
+  página.
+
 ---
 
 ## 6. Tanda C — Que valga más
@@ -359,14 +375,17 @@ filtros (con año por rango), el resaltado y los extractos están limpios, se
 busca por cita, y hay un set de evaluación con línea de base (recall@10 0,90 ·
 MRR 0,71) para medir lo que venga.
 
-Próximo: **PR-A1 de la Tanda B (PR-B1, reflow de párrafos)** no depende de
-nada; el resto de la Tanda B necesita una segunda observación con registro en
-vivo (ver §5 y la salvedad de PR-A0). O arrancar la **Tanda C** (PR-C1,
-persistir las citas). Kevin decide.
+En curso: **Tanda C, arrancando por PR-C1 (persistir las citas)** — la segunda
+sesión de observación no se pudo hacer todavía, así que la Tanda B sigue
+esperando y se avanza por C. Decidido con Kevin el 07/09/2026.
 
 Tanda B: bloqueada por PR-A0 en el papel, pero la observación 01 llegó como
 resumen y no validó los seis problemas del §2 — conviene una segunda sesión
-con registro en vivo antes de arrancar B1–B3.
+con registro en vivo antes de arrancar B1–B3. Excepciones que no dependen de
+eso y se pueden adelantar: **PR-B1** (reflow de párrafos) y **PR-B6** (más
+resultados con paginación).
 
-Tandas C, D, E: sin arrancar. D espera la decisión D-16. E arranca por
+Tanda C: **en curso** (PR-C1). El resto sin arrancar.
+
+Tandas D, E: sin arrancar. D espera la decisión D-16. E arranca por
 PR-E0 (spike) en cuanto se le quiera dar prioridad; D-17 ya está tomada.

@@ -18,7 +18,7 @@ El plan del MVP está cerrado (27/27) y archivado en
 `docs/planes_archivados/plan-spectre.md`. Sus decisiones D-1 a D-12 siguen
 vigentes salvo que el plan v2 diga lo contrario.
 
-## Estado del código (al cerrar PR-26 — los 27 PRs del plan están cerrados)
+## Estado del código (al cerrar PR-A6 — MVP 27/27 + Tanda A cerrada)
 
 Existe y anda: `spectre/config.py`, `spectre/cli.py`, `spectre/db/` (repo +
 migraciones; `spectre/jobs/runner.py` (cola durable) + `spectre/jobs/pipeline.py`
@@ -246,7 +246,7 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
     Un tomo que mide `requiere_ocr` (PR-18) se frena después de `extraer`
     (D-10): la "cola visible" son los tomos con `estado='extraido'` y
     `calidad='requiere_ocr'`.
-  - `serve [--host H] [--port N] [--no-browser]` — migra la base si hace
+  - `spectre serve [--host H] [--port N] [--no-browser]` — migra la base si hace
     falta, levanta el servidor FastAPI (`spectre/api/`) que sirve
     `spectre/web/` en `http://127.0.0.1:8000/` por defecto y abre el
     navegador (PR-20). La pestaña Buscar ya busca de verdad (PR-21):
