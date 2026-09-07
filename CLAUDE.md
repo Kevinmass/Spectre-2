@@ -10,12 +10,13 @@ localhost.
 
 ## Antes de tocar nada
 
-**Leé `docs/plan-spectre.md`. Es la fuente de verdad y el estado del
-desarrollo.** Contiene las decisiones congeladas (D-1 a D-12), la lista de
-defectos del proyecto anterior que no hay que repetir (D-01 a D-08), la
-arquitectura de paquetes (§4), el modelo de datos SQLite (§5), los 27 PRs con su
-criterio de aceptación (§6) y los riesgos abiertos (§7). La sección §9 dice cuál
-es el próximo PR.
+**Leé `docs/plan-v2.md`. Es la fuente de verdad y el estado del desarrollo.**
+Contiene las decisiones nuevas (D-13 a D-16), el relevamiento del MVP con los
+seis problemas medidos, y las tandas A/B/C/D con su criterio de aceptación.
+
+El plan del MVP está cerrado (27/27) y archivado en
+`docs/planes_archivados/plan-spectre.md`. Sus decisiones D-1 a D-12 siguen
+vigentes salvo que el plan v2 diga lo contrario.
 
 ## Estado del código (al cerrar PR-26 — los 27 PRs del plan están cerrados)
 
@@ -84,8 +85,13 @@ colección completa en `docs/qa/mediciones.md`. `README.md` (PR-26) es la
 instalación real (los scripts de PR-24) y `docs/guia-uso.md` (PR-26) es la
 guía de uso sin jerga de programador, escrita para quien solo quiere buscar
 fallos, no tocar el código. Con esto el plan (`docs/plan-spectre.md`, §6/§9)
-queda completo: lo que sigue no es un PR más de esa lista sino una decisión
-nueva sobre qué de la §8 (fuera del MVP) vale la pena.
+quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
+tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
+con su criterio de aceptación (§4-§7). Deuda conocida que arrastra el MVP: la
+tabla `citas` tiene 0 filas (el endpoint las extrae al vuelo, PR-10 nunca las
+persistió — la termina PR-C1), la búsqueda devuelve fragmentos sin agrupar
+por fallo (`hybrid.py` no dedupe — PR-A1), y la ingesta pica 5,3 GB de
+memoria (PR-C4).
 
 ## Reglas de trabajo
 
@@ -94,11 +100,13 @@ nueva sobre qué de la §8 (fuera del MVP) vale la pena.
   hecho— se hace `git push` de la rama y se abre el PR con `gh pr create`
   (base `main`). Después **se para y se espera nueva instrucción**: no se
   arranca el PR siguiente por cuenta propia.
-- Cada PR cierra escribiendo `docs/qa/bitacora-PR-NN.md`: qué hizo, qué decidió
-  por su cuenta, en qué se desvió del plan, qué verificó y con qué comandos
-  exactos, qué dudas quedaron. Tiene que poder leerse sin el diff al lado.
-- Marcá la casilla del PR en `docs/plan-spectre.md` (§6 y §9), en el mismo commit
-  que lo cierra.
+- Cada PR cierra escribiendo `docs/qa/bitacora-<ID>.md` (ej.
+  `bitacora-PR-A1.md`): qué hizo, qué decidió por su cuenta, en qué se desvió
+  del plan, qué verificó y con qué comandos exactos, qué dudas quedaron. Tiene
+  que poder leerse sin el diff al lado.
+- Marcá la casilla del PR en `docs/plan-v2.md`, en el mismo commit que lo
+  cierra. (Los PRs del MVP están en `docs/planes_archivados/plan-spectre.md`,
+  ya todos marcados.)
 - Los criterios de aceptación son números medidos sobre el fixture, no "parece
   que anda". Verificá contra el número del plan; si no da, se anota la diferencia
   medida en la bitácora y no se fuerza.
@@ -269,10 +277,10 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
 
 ## Git
 
-- Rama por PR: `pr-NN-slug` (ej. `pr-02-esquema-sqlite`), sacada de `main`
+- Rama por PR: `pr-<id>-slug` (ej. `pr-a1-agrupar-fallo`), sacada de `main`
   actualizado. PR contra `main`. El remoto es `origin` → `Kevinmass/Spectre-2`.
-- El commit que cierra el PR marca la casilla en `docs/plan-spectre.md` (§6 y §9)
-  y agrega `docs/qa/bitacora-PR-NN.md`.
+- El commit que cierra el PR marca la casilla en `docs/plan-v2.md` y agrega
+  `docs/qa/bitacora-<ID>.md`.
 
 ## Fixture de referencia
 
