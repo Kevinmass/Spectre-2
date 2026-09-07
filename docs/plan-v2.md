@@ -226,6 +226,12 @@ pendiente: se puede empezar hoy.*
   Los 349 tomos buscables por año, con estado, y selección múltiple para
   encolar varios. Separar "subir un documento propio" de la noción de tomo.
   *Acepta:* indexar un tomo sin saber su número de antemano.
+  *Parche interino (fuera del plan, rama `fix-indexar-sin-csjn-tomo-id`,
+  07/09/2026):* mientras el catálogo no esté en la UI, `POST
+  /api/tomos/{n}/indexar` sin `csjn_tomo_id` devuelve **400** con un mensaje
+  legible en vez de registrar un tomo que revienta en `descargar` (bug
+  reportado). El id sigue habiendo que tipearlo a mano — eso lo resuelve este
+  PR.
 
 - [ ] **PR-B5 `[V]` Primer uso**
   Qué ve alguien que abre Spectre por primera vez y no tiene nada indexado.

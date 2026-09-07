@@ -748,27 +748,48 @@ def test_estado_requiere_ocr_no_cuenta_como_error(datos_tmp):
 # --- POST /api/tomos/{numero}/indexar (PR-23) ------------------------------ #
 
 
-def test_indexar_tomo_responde_202_con_el_registro_inicial(datos_tmp):
+def test_indexar_sin_csjn_tomo_id_da_400_y_no_registra_nada(datos_tmp):
+    # El PDF se baja por el id interno de la CSJN (no el número de tomo): sin
+    # él no hay descarga posible. La API corta con un 400 legible en vez de
+    # registrar un tomo que reventaría en la etapa `descargar` y quedaría a la
+    # vista con un error de programador.
     r = _cliente().post("/api/tomos/999/indexar", json={})
+    assert r.status_code == 400
+    assert "csjn catalog" in r.json()["detail"]
+
+    # y no quedó ningún tomo registrado
+    assert _cliente().get("/api/estado").json()["tomos"] == []
+
+
+def test_indexar_con_csjn_tomo_id_en_blanco_tambien_da_400(datos_tmp):
+    for valor in ("", "   "):
+        r = _cliente().post("/api/tomos/999/indexar", json={"csjn_tomo_id": valor})
+        assert r.status_code == 400
+    assert _cliente().get("/api/estado").json()["tomos"] == []
+
+
+def test_indexar_sin_id_se_permite_si_el_tomo_ya_tiene_uno(datos_tmp):
+    # Retomar una indexación: el tomo ya está registrado con su id, un POST
+    # sin cuerpo lo deja seguir (no 400). Se lo deja `indexado` para que el
+    # pipeline en segundo plano sea un no-op y el test no toque la red.
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348, csjn_tomo_id="445", estado="indexado")
+    conn.close()
+
+    r = _cliente().post("/api/tomos/348/indexar", json={})
     assert r.status_code == 202
-    cuerpo = r.json()
-    assert cuerpo["numero"] == 999
-    assert cuerpo["estado"] == "registrado"
-    assert cuerpo["etapas_hechas"] == 0
-
-
-def test_indexar_sin_csjn_tomo_id_falla_en_descargar_y_queda_visible(datos_tmp):
-    # TestClient corre la BackgroundTask antes de devolver el control (a
-    # diferencia de un servidor real): para cuando el POST vuelve, el
-    # pipeline ya se frenó y el error tiene que verse en /api/estado.
-    r = _cliente().post("/api/tomos/999/indexar", json={})
-    assert r.status_code == 202
-
     estado = _cliente().get("/api/estado").json()
-    tomo = estado["tomos"][0]
-    assert tomo["numero"] == 999
-    assert tomo["error"]["etapa"] == "descargar"
-    assert "csjn_tomo_id" in tomo["error"]["mensaje"]
+    assert len(estado["tomos"]) == 1
+    assert estado["tomos"][0]["estado"] == "indexado"
+
+
+def test_indexar_sin_id_se_permite_si_el_tomo_ya_tiene_pdf(datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(348, pdf_path="/algun/lado/348.pdf", estado="indexado")
+    conn.close()
+
+    r = _cliente().post("/api/tomos/348/indexar", json={})
+    assert r.status_code == 202
 
 
 @pytest.fixture
@@ -821,10 +842,14 @@ def test_indexar_desde_csjn_con_descarga_falsa_termina_indexado(
 
 
 def test_indexar_es_idempotente_sobre_un_tomo_ya_registrado(datos_tmp):
+    conn, repo = _base_migrada()
+    repo.insert_tomo(999, csjn_tomo_id="123", estado="indexado")
+    conn.close()
+
     primero = _cliente().post("/api/tomos/999/indexar", json={}).json()
     segundo = _cliente().post("/api/tomos/999/indexar", json={}).json()
     assert primero["numero"] == segundo["numero"] == 999
-    # sigue frenado en la misma etapa, no duplica el tomo
+    # no duplica el tomo
     estado = _cliente().get("/api/estado").json()
     assert len(estado["tomos"]) == 1
 

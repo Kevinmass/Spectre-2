@@ -65,7 +65,10 @@ grafo de precedentes (§8.3) — y `GET
 "ver en el PDF" con `#page=N` calculado con `pagina_oficial +
 tomos.offset_pagina` —, y dos rutas que escriben (PR-23): `POST
 /api/tomos/{numero}/indexar` (registra o retoma un tomo por `csjn_tomo_id`,
-D-9) y `POST /api/tomos/{numero}/subir` (sube un PDF a mano a `data/tomos/`,
+D-9 — sin ese id, y salvo que el tomo ya lo tenga o ya tenga PDF, corta con
+**400**: el id es interno del sitio de la CSJN, no el número de tomo, y sin él
+no hay descarga; parche a la espera de PR-B4) y `POST
+/api/tomos/{numero}/subir` (sube un PDF a mano a `data/tomos/`,
 D-9) — las dos arrancan `jobs.correr_pipeline` con `BackgroundTasks` de
 Starlette (el hilo del pool que ya trae el framework, no un worker casero) y
 devuelven 202 al toque; `GET /api/estado` agrega por tomo `etapas_hechas`/
