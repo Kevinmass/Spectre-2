@@ -104,10 +104,11 @@ fallos, no tocar el código. Con esto el plan (`docs/plan-spectre.md`, §6/§9)
 quedó completo (27/27). El desarrollo sigue en `docs/plan-v2.md`, definido
 tras relevar el MVP real: seis problemas medidos (§2) y las tandas A/B/C/D
 con su criterio de aceptación (§4-§7), más la Tanda E (multi-tribunal, D-17).
-**Cerrados de v2:** PR-A0 (observación), PR-A1 (agrupar resultados por fallo),
-PR-A2 (filtros en la pantalla + año como rango), PR-A3 (resaltado sin ruido),
-PR-A4 (extractos que empiezan en borde de palabra / oración), PR-A5 (buscar
-por cita).
+**Tanda A cerrada** (PR-A0 a PR-A6): observación con la primera usuaria,
+resultados agrupados por fallo, filtros en la UI (año por rango), resaltado y
+extractos limpios, búsqueda por cita, y un set de evaluación
+(`docs/qa/eval-busqueda.md`, línea de base recall@10 0,90 · MRR 0,71) para
+medir cambios de ranking.
 Deuda conocida que arrastra el MVP: la tabla `citas` tiene 0 filas (el
 endpoint las extrae al vuelo, PR-10 nunca las persistió — la termina PR-C1) y
 la ingesta pica 5,3 GB de memoria (PR-C4).
@@ -294,7 +295,11 @@ paso previo. Si el `.venv` se rehace desde cero, hay que reinstalar el extra.
 - Las mediciones de aceptación sobre el tomo entero son tests `slow` + `skipif`
   que necesitan `data/tomos/348.pdf`. El `pytest` de todos los días las saltea
   (`addopts = -m 'not slow and not red'`); corrélas con `pytest -m slow`
-  (tardan minutos y CI no las ve).
+  (tardan minutos y CI no las ve). El set de evaluación de la búsqueda (PR-A6,
+  `tests/test_eval_busqueda.py` + `tests/fixtures/eval-busqueda.jsonl`) es
+  `slow` y corre contra el índice real local (`data/spectre.db`); mide
+  recall@10 / MRR con un piso de regresión. Línea de base y método en
+  `docs/qa/eval-busqueda.md`.
 - `red` (PR-16): tests que pegan contra un sitio real por HTTP (el catálogo de
   la CSJN, `spectre/corpus/csjn/catalog.py`). Rápidos (segundos), pero CI no
   depende de que el sitio externo esté arriba, así que quedan afuera del
